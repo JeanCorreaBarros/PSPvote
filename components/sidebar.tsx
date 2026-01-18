@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Vote,
+  QrCode,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { logout } from "@/lib/auth"
@@ -27,6 +28,7 @@ const menuItems = [
   { icon: ClipboardList, label: "Registro de Votos", href: "/dashboard/registro-votos" },
   { icon: Users, label: "Votantes", href: "/dashboard/votantes" },
   { icon: MapPin, label: "Puestos de Votación", href: "/dashboard/puestos" },
+  /*{ icon: QrCode, label: "Scan Usuarios", href: "/dashboard/scan-usuarios" },*/
   { icon: BarChart3, label: "Reportes", href: "/dashboard/reportes" },
   { icon: Settings, label: "Configuración", href: "/dashboard/configuracion" },
 ]
