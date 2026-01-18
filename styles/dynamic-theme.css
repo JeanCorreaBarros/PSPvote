@@ -1,0 +1,171 @@
+/* Estilos Dinámicos para Colores desde .env */
+
+/* Variables de CSS derivadas de .env */
+:root {
+  --dynamic-primary: var(--color-primary, #3b82f6);
+  /*--dynamic-secondary: var(--color-secondary, #8b5cf6);*/
+  --dynamic-accent: var(--color-accent, #ec4899);
+}
+
+/* Aplicar colores dinámicos a elementos específicos */
+
+/* Botones Primarios - DESHABILITADO: mantener estilos originales */
+/* .bg-primary,
+button:not([variant="outline"]):not([variant="ghost"]),
+.btn-primary {
+  background-color: var(--dynamic-primary) !important;
+}
+
+.text-primary,
+a[href],
+.link-primary {
+  color: var(--dynamic-primary) !important;
+}
+
+.border-primary,
+.ring-primary {
+  border-color: var(--dynamic-primary) !important;
+  outline-color: var(--dynamic-primary) !important;
+} */
+
+/* Acentos */
+.bg-accent,
+.accent-bg {
+  background-color: var(--dynamic-accent) !important;
+}
+
+.text-accent,
+.accent-text {
+  color: var(--dynamic-accent) !important;
+}
+
+/* Secundario */
+.bg-secondary {
+  background-color: var(--dynamic-secondary) !important;
+}
+
+.text-secondary {
+  color: var(--dynamic-secondary) !important;
+}
+
+/* Badges */
+[class*="badge"],
+.badge {
+  background-color: var(--dynamic-accent);
+  color: white;
+}
+
+/* Headers y Navbars */
+header,
+nav,
+.navbar {
+  --color-primary: var(--dynamic-primary);
+}
+
+/* Sidebar */
+.sidebar,
+[class*="sidebar"] {
+  --sidebar-primary: var(--dynamic-primary);
+}
+
+/* Fokus y Hover States */
+button:focus,
+input:focus,
+a:focus {
+  outline-color: var(--dynamic-primary);
+}
+
+button:hover:not(:disabled),
+a:hover {
+  opacity: 0.9;
+}
+
+/* Inputs y Formularios */
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--dynamic-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Tabs y Navegación */
+[role="tab"][aria-selected="true"],
+.tab-active {
+  color: var(--dynamic-primary);
+  border-bottom-color: var(--dynamic-primary);
+}
+
+/* Checkboxes y Radios */
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background-color: var(--dynamic-primary);
+  border-color: var(--dynamic-primary);
+}
+
+/* Cards con Borde Izquierdo */
+.card-highlight {
+  border-left: 4px solid var(--dynamic-primary);
+}
+
+/* Elementos de Atención */
+.alert-info {
+  border-left-color: var(--dynamic-primary);
+}
+
+.alert-accent {
+  border-left-color: var(--dynamic-accent);
+}
+
+/* Vínculos dinámicos */
+a {
+  color: var(--dynamic-primary);
+}
+
+a:visited {
+  color: var(--dynamic-secondary);
+}
+
+/* Graduales/Gradientes usando colores dinámicos */
+.gradient-primary {
+  background: linear-gradient(
+    135deg,
+    var(--dynamic-primary),
+    var(--dynamic-secondary)
+  );
+}
+
+/* Sombras con colores dinámicos */
+.shadow-primary {
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+}
+
+.shadow-accent {
+  box-shadow: 0 4px 20px rgba(236, 72, 153, 0.3);
+}
+
+/* Transformaciones de color para estados */
+.hover-lighten:hover {
+  filter: brightness(1.1);
+}
+
+.hover-darken:hover {
+  filter: brightness(0.9);
+}
+
+/* Transiciones suaves */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Theme Persistence */
+[data-theme="primary"] {
+  --current-color: var(--dynamic-primary);
+}
+
+[data-theme="secondary"] {
+  --current-color: var(--dynamic-secondary);
+}
+
+[data-theme="accent"] {
+  --current-color: var(--dynamic-accent);
+}
