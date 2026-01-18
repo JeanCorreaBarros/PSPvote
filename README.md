@@ -485,9 +485,9 @@ Ver archivo `LICENSE` para más detalles.
 
 **Jean Carlos Correa Barros**
 
-- GitHub: [@jeancarlos](https://github.com)
-- Email: jeancarlos@example.com
-- LinkedIn: [jean-carlos-correa](https://linkedin.com)
+- GitHub: [@JeanCaorreaBarros](https://github.com/JeanCorreaBarros/)
+- Email: jeancorrea1000@gmail.com
+- LinkedIn: [jean-carlos-correa](https://www.linkedin.com/in/jeancarloscorrea/)
 
 ---
 
