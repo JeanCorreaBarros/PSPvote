@@ -10,53 +10,47 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Vote, Lock, Mail, Eye, EyeOff, CheckCircle2 } from "lucide-react"
+import { authApi } from "@/lib/api"
+import { setToken } from "@/lib/auth"
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState("")
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
   // Demo credentials
-  const DEMO_EMAIL = "demo@pspvote.com"
-  const DEMO_PASSWORD = "demo123"
+  const DEMO_USERNAME = "admin"
+  const DEMO_PASSWORD = "admin123"
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
-    // Simulate API call with fetch
     try {
-      // This is ready for real API consumption
-      // const response = await fetch('/api/auth/login', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ email, password }),
-      // })
-      // const data = await response.json()
-      // if (!response.ok) throw new Error(data.message)
-
-      // Demo authentication
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const response = await authApi.login({ username, password }) as any
       
-      if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
-        localStorage.setItem("pspvote_user", JSON.stringify({ email, name: "Usuario Demo" }))
+      if (response && response.token) {
+        // Store token and user info
+        setToken(response.token)
+        localStorage.setItem("pspvote_user", JSON.stringify({ username, name: username }))
         router.push("/dashboard")
       } else {
-        setError("Credenciales incorrectas. Usa demo@pspvote.com / demo123")
+        setError("Error: No se recibió token del servidor")
       }
-    } catch {
-      setError("Error al iniciar sesión. Intenta de nuevo.")
+    } catch (err) {
+      setError("Credenciales incorrectas o error al conectar con el servidor.")
+      console.error("Login error:", err)
     } finally {
       setIsLoading(false)
     }
   }
 
   const fillDemoCredentials = () => {
-    setEmail(DEMO_EMAIL)
+    setUsername(DEMO_USERNAME)
     setPassword(DEMO_PASSWORD)
   }
 
@@ -137,17 +131,17 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground font-medium">
-                  Correo electrónico
+                <Label htmlFor="username" className="text-foreground font-medium">
+                  Usuario
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="correo@ejemplo.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="username"
+                    type="text"
+                    placeholder="admin"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     className="pl-10 h-12 bg-muted/50 border-border focus:border-primary"
                     required
                   />
@@ -211,8 +205,8 @@ export default function LoginPage() {
                 <strong className="text-foreground">Credenciales de prueba:</strong>
               </p>
               <p className="text-sm text-muted-foreground font-mono">
-                Email: demo@pspvote.com<br />
-                Password: demo123
+                Usuario: admin<br />
+                Contraseña: admin123
               </p>
               <Button
                 type="button"

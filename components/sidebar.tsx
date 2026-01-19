@@ -14,32 +14,55 @@ import {
   ChevronRight,
   Vote,
   QrCode,
+  ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { logout } from "@/lib/auth"
+import { useState } from "react"
 
 interface SidebarProps {
   isCollapsed: boolean
   onToggle: () => void
 }
 
-const menuItems = [
+interface MenuItem {
+  icon: React.ComponentType<any>
+  label: string
+  href?: string
+  submenu?: Array<{
+    label: string
+    href: string
+  }>
+}
+
+const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: ClipboardList, label: "Registro de Votos", href: "/dashboard/registro-votos" },
   { icon: Users, label: "Votantes", href: "/dashboard/votantes" },
   { icon: MapPin, label: "Puestos de Votación", href: "/dashboard/puestos" },
-  /*{ icon: QrCode, label: "Scan Usuarios", href: "/dashboard/scan-usuarios" },*/
   { icon: BarChart3, label: "Reportes", href: "/dashboard/reportes" },
-  { icon: Settings, label: "Configuración", href: "/dashboard/configuracion" },
+  {
+    icon: Settings,
+    label: "Configuración",
+    submenu: [
+      { label: "Configuración", href: "/dashboard/configuracion" },
+      { label: "Usuarios", href: "/dashboard/configuracion/usuarios" },
+    ],
+  },
 ]
 
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
 
   const handleLogout = () => {
     logout()
     router.push("/")
+  }
+
+  const toggleSubmenu = (label: string) => {
+    setExpandedMenu(expandedMenu === label ? null : label)
   }
 
   const sidebarVariants = {
@@ -99,15 +122,26 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       <nav className="flex-1 py-4 overflow-y-auto">
         <ul className="space-y-1 px-3">
           {menuItems.map((item) => {
-            const isActive = pathname === item.href
+            const hasSubmenu = item.submenu && item.submenu.length > 0
+            const isExpanded = expandedMenu === item.label
+            const isActive = hasSubmenu
+              ? pathname.startsWith("/dashboard/configuracion")
+              : item.href === pathname
+
             return (
-              <li key={item.href}>
-                <motion.a
-                  href={item.href}
-                  whileHover={{ x: 4 }}
+              <li key={item.label}>
+                <motion.div
+                  whileHover={hasSubmenu ? {} : { x: 4 }}
                   whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    if (hasSubmenu) {
+                      toggleSubmenu(item.label)
+                    } else if (item.href) {
+                      router.push(item.href)
+                    }
+                  }}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors relative overflow-hidden",
+                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors relative overflow-hidden cursor-pointer",
                     isActive
                       ? "bg-sidebar-accent text-sidebar-primary"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/50"
@@ -125,11 +159,65 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                     variants={labelVariants}
                     animate={isCollapsed ? "hidden" : "visible"}
                     transition={{ duration: 0.2 }}
-                    className="text-sm font-medium whitespace-nowrap"
+                    className="text-sm font-medium whitespace-nowrap flex-1"
                   >
                     {item.label}
                   </motion.span>
-                </motion.a>
+                  {hasSubmenu && !isCollapsed && (
+                    <motion.div
+                      animate={{ rotate: isExpanded ? 180 : 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <ChevronDown className="w-4 h-4 text-sidebar-foreground" />
+                    </motion.div>
+                  )}
+                </motion.div>
+
+                {/* Submenu */}
+                {hasSubmenu && (
+                  <AnimatePresence>
+                    {isExpanded && !isCollapsed && (
+                      <motion.ul
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="mt-1 space-y-1 pl-6"
+                      >
+                        {item.submenu?.map((subitem) => {
+                          const isSubActive = pathname === subitem.href
+                          return (
+                            <li key={subitem.href}>
+                              <motion.a
+                                href={subitem.href}
+                                whileHover={{ x: 4 }}
+                                whileTap={{ scale: 0.98 }}
+                                className={cn(
+                                  "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-sm relative overflow-hidden",
+                                  isSubActive
+                                    ? "bg-sidebar-accent text-sidebar-primary"
+                                    : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                                )}
+                              >
+                                {isSubActive && (
+                                  <motion.div
+                                    layoutId="activeSubIndicator"
+                                    className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full"
+                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                  />
+                                )}
+                                <div className="w-2 h-2 bg-sidebar-foreground/30 rounded-full" />
+                                <motion.span className="font-medium whitespace-nowrap">
+                                  {subitem.label}
+                                </motion.span>
+                              </motion.a>
+                            </li>
+                          )
+                        })}
+                      </motion.ul>
+                    )}
+                  </AnimatePresence>
+                )}
               </li>
             )
           })}

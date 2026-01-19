@@ -15,18 +15,30 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { UserPlus, AlertCircle, CheckCircle } from "lucide-react"
+import { UserPlus, AlertCircle, CheckCircle, Search, X } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface AddVotanteDialogProps {
   onVotanteAdded?: () => void
 }
 
+// Puestos de votación disponibles
+const PUESTOS_VOTACION = [
+  { id: "puesto-1", nombre: "Puesto de Votación 1 - Centro" },
+  { id: "puesto-2", nombre: "Puesto de Votación 2 - Norte" },
+  { id: "puesto-3", nombre: "Puesto de Votación 3 - Sur" },
+  { id: "puesto-4", nombre: "Puesto de Votación 4 - Este" },
+  { id: "puesto-5", nombre: "Puesto de Votación 5 - Oeste" },
+  { id: "puesto-6", nombre: "Puesto de Votación 6 - Centro Histórico" },
+]
+
 export function AddVotanteDialog({ onVotanteAdded }: AddVotanteDialogProps) {
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState("")
+  const [searchPuesto, setSearchPuesto] = useState("")
+  const [showPuestosDropdown, setShowPuestosDropdown] = useState(false)
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -47,6 +59,12 @@ export function AddVotanteDialog({ onVotanteAdded }: AddVotanteDialogProps) {
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
+
+  const puestosFiltered = PUESTOS_VOTACION.filter((puesto) =>
+    puesto.nombre.toLowerCase().includes(searchPuesto.toLowerCase())
+  )
+
+  const puestoSeleccionado = PUESTOS_VOTACION.find((p) => p.id === formData.puesto)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -110,7 +128,7 @@ export function AddVotanteDialog({ onVotanteAdded }: AddVotanteDialogProps) {
           Agregar Votante
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-screen overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-screen overflow-y-auto" onClick={() => setShowPuestosDropdown(false)}>
         <DialogHeader>
           <DialogTitle>Agregar Nuevo Votante</DialogTitle>
           <DialogDescription>
@@ -123,6 +141,7 @@ export function AddVotanteDialog({ onVotanteAdded }: AddVotanteDialogProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="space-y-4 py-4"
+          onClick={(e) => e.stopPropagation()}
         >
           {/* Alerts */}
           {error && (
@@ -234,22 +253,87 @@ export function AddVotanteDialog({ onVotanteAdded }: AddVotanteDialogProps) {
 
             {/* Puesto de Votación */}
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="puesto">Puesto de Votación</Label>
-              <Select
-                value={formData.puesto}
-                onValueChange={(value) => handleSelectChange("puesto", value)}
-                disabled={isLoading || success}
-              >
-                <SelectTrigger id="puesto">
-                  <SelectValue placeholder="Selecciona un puesto" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="puesto-1">Puesto de Votación 1 - Centro</SelectItem>
-                  <SelectItem value="puesto-2">Puesto de Votación 2 - Norte</SelectItem>
-                  <SelectItem value="puesto-3">Puesto de Votación 3 - Sur</SelectItem>
-                  <SelectItem value="puesto-4">Puesto de Votación 4 - Este</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="puesto-search">Puesto de Votación</Label>
+              <div className="relative">
+                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                  <Search className="w-4 h-4 text-muted-foreground" />
+                  <input
+                    id="puesto-search"
+                    type="text"
+                    placeholder="Buscar o seleccionar puesto..."
+                    value={searchPuesto}
+                    onChange={(e) => setSearchPuesto(e.target.value)}
+                    onClick={() => setShowPuestosDropdown(true)}
+                    onFocus={() => setShowPuestosDropdown(true)}
+                    disabled={isLoading || success}
+                    className="flex-1 bg-transparent outline-none text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                  {searchPuesto && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchPuesto("")
+                        setShowPuestosDropdown(true)
+                      }}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      title="Limpiar búsqueda"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {showPuestosDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                    <div className="p-2 border-b border-border text-xs text-muted-foreground">
+                      {puestosFiltered.length} {puestosFiltered.length === 1 ? "puesto encontrado" : "puestos encontrados"}
+                    </div>
+                    {puestosFiltered.length > 0 ? (
+                      puestosFiltered.map((puesto) => (
+                        <button
+                          key={puesto.id}
+                          type="button"
+                          onClick={() => {
+                            handleSelectChange("puesto", puesto.id)
+                            setSearchPuesto("")
+                            setShowPuestosDropdown(false)
+                          }}
+                          disabled={isLoading || success}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed border-b border-border last:border-b-0 ${
+                            formData.puesto === puesto.id ? "bg-accent text-accent-foreground font-medium" : ""
+                          }`}
+                        >
+                          {puesto.nombre}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                        No se encontraron puestos
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {formData.puesto && (
+                  <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium">Puesto seleccionado:</p>
+                      <p className="text-sm text-foreground font-medium">{puestoSeleccionado?.nombre}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectChange("puesto", "")
+                        setSearchPuesto("")
+                      }}
+                      className="text-muted-foreground hover:text-foreground ml-2"
+                      title="Cambiar selección"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Observaciones */}

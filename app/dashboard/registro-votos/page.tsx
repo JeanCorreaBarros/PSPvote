@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { Suspense } from "react"
+import toast from "react-hot-toast"
 
 import { motion, AnimatePresence } from "framer-motion"
 import { Header } from "@/components/header"
@@ -34,7 +35,7 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Plus, Search, Edit2, Trash2, MoreVertical, Filter } from "lucide-react"
+import { Plus, Search, Edit2, Trash2, MoreVertical, Filter, X } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,10 +44,18 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { votosApi } from "@/lib/api"
 
+// Puestos de votación disponibles
+const PUESTOS_VOTACION = [
+  { id: "IE San José", nombre: "IE San José" },
+  { id: "IE La Paz", nombre: "IE La Paz" },
+  { id: "Coliseo Municipal", nombre: "Coliseo Municipal" },
+  { id: "Centro Cívico", nombre: "Centro Cívico" },
+]
+
 interface Votante {
   id: string
-  nombres: string
-  apellidos: string
+  nombre1: string
+  apellido1: string
   cedula: string
   telefono: string
   direccion: string
@@ -56,104 +65,8 @@ interface Votante {
   fechaRegistro: string
 }
 
-const initialVotantes: Votante[] = [
-  {
-    id: "VT-001",
-    nombres: "Juan Carlos",
-    apellidos: "Pérez Gómez",
-    cedula: "1234567890",
-    telefono: "3001234567",
-    direccion: "Calle 45 #23-12",
-    barrio: "Centro",
-    puestoVotacion: "IE San José",
-    estado: "verificado",
-    fechaRegistro: "15/01/2026",
-  },
-  {
-    id: "VT-002",
-    nombres: "María Elena",
-    apellidos: "García López",
-    cedula: "9876543210",
-    telefono: "3109876543",
-    direccion: "Carrera 12 #34-56",
-    barrio: "La Esperanza",
-    puestoVotacion: "IE La Paz",
-    estado: "registrado",
-    fechaRegistro: "14/01/2026",
-  },
-  {
-    id: "VT-003",
-    nombres: "Pedro Antonio",
-    apellidos: "Martínez Ruiz",
-    cedula: "5678901234",
-    telefono: "3205678901",
-    direccion: "Avenida 5 #67-89",
-    barrio: "San Antonio",
-    puestoVotacion: "Coliseo Municipal",
-    estado: "pendiente",
-    fechaRegistro: "13/01/2026",
-  },
-  {
-    id: "VT-004",
-    nombres: "Ana Lucía",
-    apellidos: "Rodríguez Castro",
-    cedula: "3456789012",
-    telefono: "3153456789",
-    direccion: "Calle 78 #12-34",
-    barrio: "Villa Rosa",
-    puestoVotacion: "IE San José",
-    estado: "verificado",
-    fechaRegistro: "12/01/2026",
-  },
-  {
-    id: "VT-005",
-    nombres: "Carlos Eduardo",
-    apellidos: "Sánchez Mora",
-    cedula: "7890123456",
-    telefono: "3007890123",
-    direccion: "Carrera 34 #56-78",
-    barrio: "El Prado",
-    puestoVotacion: "IE La Paz",
-    estado: "registrado",
-    fechaRegistro: "11/01/2026",
-  },
-  {
-    id: "VT-006",
-    nombres: "Laura Patricia",
-    apellidos: "Hernández Villa",
-    cedula: "2345678901",
-    telefono: "3112345678",
-    direccion: "Calle 23 #45-67",
-    barrio: "Centro",
-    puestoVotacion: "Coliseo Municipal",
-    estado: "verificado",
-    fechaRegistro: "10/01/2026",
-  },
-  {
-    id: "VT-007",
-    nombres: "Roberto Luis",
-    apellidos: "Díaz Vargas",
-    cedula: "8901234567",
-    telefono: "3208901234",
-    direccion: "Avenida Principal #89-01",
-    barrio: "La Esperanza",
-    puestoVotacion: "IE San José",
-    estado: "pendiente",
-    fechaRegistro: "09/01/2026",
-  },
-  {
-    id: "VT-008",
-    nombres: "Sofía Carolina",
-    apellidos: "Torres Mejía",
-    cedula: "4567890123",
-    telefono: "3154567890",
-    direccion: "Carrera 67 #23-45",
-    barrio: "San Antonio",
-    puestoVotacion: "IE La Paz",
-    estado: "registrado",
-    fechaRegistro: "08/01/2026",
-  },
-]
+// Los datos se cargan desde el API
+const initialVotantes: Votante[] = []
 
 const tabs = ["Todos", "Verificados", "Registrados", "Pendientes"]
 
@@ -168,10 +81,12 @@ export default function RegistroVotosPage() {
   const [editingVotante, setEditingVotante] = useState<Votante | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [searchPuesto, setSearchPuesto] = useState("")
+  const [showPuestosDropdown, setShowPuestosDropdown] = useState(false)
 
   const [formData, setFormData] = useState({
-    nombres: "",
-    apellidos: "",
+    nombre1: "",
+    apellido1: "",
     cedula: "",
     telefono: "",
     direccion: "",
@@ -185,13 +100,41 @@ export default function RegistroVotosPage() {
       try {
         setLoading(true)
         setError(null)
-        // Descomenta cuando el endpoint esté listo
-        // const data = await votosApi.getAll()
-        // Convertir a formato Votante si es necesario
-        // setVotantes(data)
+        const token = localStorage.getItem('pspvote_token')
+        
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch('http://localhost:3000/api/votaciones', {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+        if (!response.ok) {
+          throw new Error('Error al cargar los votos')
+        }
+        const data = await response.json()
+        
+        if (Array.isArray(data)) {
+          const votantesFormateados = data.map((votante: any) => ({
+            id: votante.id,
+            nombre1: votante.nombre1 || '',
+            apellido1: votante.apellido1 || '',
+            cedula: votante.cedula,
+            telefono: votante.telefono,
+            direccion: votante.direccion,
+            barrio: votante.barrio,
+            puestoVotacion: votante.puestoVotacion,
+            estado: "registrado" as const,
+            fechaRegistro: new Date(votante.createdAt).toLocaleDateString("es-CO"),
+          }))
+          setVotantes(votantesFormateados)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al cargar votos')
-        setVotantes(initialVotantes)
+        toast.error('Error al cargar los votos desde el servidor')
       } finally {
         setLoading(false)
       }
@@ -202,8 +145,8 @@ export default function RegistroVotosPage() {
 
   const filteredVotantes = votantes.filter((votante) => {
     const matchesSearch =
-      votante.nombres.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      votante.apellidos.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      votante.nombre1.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      votante.apellido1.toLowerCase().includes(searchTerm.toLowerCase()) ||
       votante.cedula.includes(searchTerm)
 
     const matchesTab =
@@ -215,34 +158,77 @@ export default function RegistroVotosPage() {
     return matchesSearch && matchesTab
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (editingVotante) {
-      setVotantes(
-        votantes.map((v) =>
-          v.id === editingVotante.id
-            ? { ...v, ...formData }
-            : v
+    try {
+      setLoading(true)
+      
+      if (editingVotante) {
+        // Para edición, solo actualizar localmente
+        setVotantes(
+          votantes.map((v) =>
+            v.id === editingVotante.id
+              ? { ...v, ...formData }
+              : v
+          )
         )
-      )
-    } else {
-      const newVotante: Votante = {
-        id: `VT-${String(votantes.length + 1).padStart(3, "0")}`,
-        ...formData,
-        estado: "pendiente",
-        fechaRegistro: new Date().toLocaleDateString("es-CO"),
+        toast.success('Votante actualizado correctamente')
+      } else {
+        // Para registro nuevo, consumir el endpoint
+        const token = localStorage.getItem('pspvote_token')
+        
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch('http://localhost:3000/api/votaciones', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(formData),
+        })
+
+        if (!response.ok) {
+          throw new Error('Error al registrar el votante')
+        }
+
+        const nuevoVotante = await response.json()
+        
+        // Agregar el nuevo votante a la tabla
+        const votanteFormateado: Votante = {
+          id: nuevoVotante.id,
+          nombre1: nuevoVotante.nombre1,
+          apellido1: nuevoVotante.apellido1,
+          cedula: nuevoVotante.cedula,
+          telefono: nuevoVotante.telefono,
+          direccion: nuevoVotante.direccion,
+          barrio: nuevoVotante.barrio,
+          puestoVotacion: nuevoVotante.puestoVotacion,
+          estado: "registrado",
+          fechaRegistro: new Date(nuevoVotante.createdAt).toLocaleDateString("es-CO"),
+        }
+        
+        setVotantes([votanteFormateado, ...votantes])
+        toast.success('¡Votante registrado con éxito!')
       }
-      setVotantes([newVotante, ...votantes])
+      
+      resetForm()
+      setIsDialogOpen(false)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al registrar'
+      toast.error(errorMessage)
+    } finally {
+      setLoading(false)
     }
-    resetForm()
-    setIsDialogOpen(false)
   }
 
   const handleEdit = (votante: Votante) => {
     setEditingVotante(votante)
     setFormData({
-      nombres: votante.nombres,
-      apellidos: votante.apellidos,
+      nombre1: votante.nombre1,
+      apellido1: votante.apellido1,
       cedula: votante.cedula,
       telefono: votante.telefono,
       direccion: votante.direccion,
@@ -258,8 +244,8 @@ export default function RegistroVotosPage() {
 
   const resetForm = () => {
     setFormData({
-      nombres: "",
-      apellidos: "",
+      nombre1: "",
+      apellido1: "",
       cedula: "",
       telefono: "",
       direccion: "",
@@ -267,7 +253,14 @@ export default function RegistroVotosPage() {
       puestoVotacion: "",
     })
     setEditingVotante(null)
+    setSearchPuesto("")
   }
+
+  const puestosFiltered = PUESTOS_VOTACION.filter((puesto) =>
+    puesto.nombre.toLowerCase().includes(searchPuesto.toLowerCase())
+  )
+
+  const puestoSeleccionado = PUESTOS_VOTACION.find((p) => p.id === formData.puestoVotacion)
 
   const getStatusBadge = (estado: Votante["estado"]) => {
     const styles = {
@@ -324,29 +317,29 @@ export default function RegistroVotosPage() {
                       Nuevo Registro
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
+                  <DialogContent className="max-w-2xl" onClick={() => setShowPuestosDropdown(false)}>
                     <DialogHeader>
                       <DialogTitle className="text-foreground">
                         {editingVotante ? "Editar Votante" : "Registrar Nuevo Votante"}
                       </DialogTitle>
                     </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                    <form onSubmit={handleSubmit} className="space-y-4 mt-4" onClick={(e) => e.stopPropagation()}>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="nombres">Nombres</Label>
+                          <Label htmlFor="nombre1">Nombres</Label>
                           <Input
-                            id="nombres"
-                            value={formData.nombres}
-                            onChange={(e) => setFormData({ ...formData, nombres: e.target.value })}
+                            id="nombre1"
+                            value={formData.nombre1}
+                            onChange={(e) => setFormData({ ...formData, nombre1: e.target.value })}
                             required
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="apellidos">Apellidos</Label>
+                          <Label htmlFor="apellido1">Apellidos</Label>
                           <Input
-                            id="apellidos"
-                            value={formData.apellidos}
-                            onChange={(e) => setFormData({ ...formData, apellidos: e.target.value })}
+                            id="apellido1"
+                            value={formData.apellido1}
+                            onChange={(e) => setFormData({ ...formData, apellido1: e.target.value })}
                             required
                           />
                         </div>
@@ -392,28 +385,92 @@ export default function RegistroVotosPage() {
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="puestoVotacion">Puesto de Votación</Label>
-                          <Select
-                            value={formData.puestoVotacion}
-                            onValueChange={(value) => setFormData({ ...formData, puestoVotacion: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar puesto" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="IE San José">IE San José</SelectItem>
-                              <SelectItem value="IE La Paz">IE La Paz</SelectItem>
-                              <SelectItem value="Coliseo Municipal">Coliseo Municipal</SelectItem>
-                              <SelectItem value="Centro Cívico">Centro Cívico</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div className="relative">
+                            <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                              <Search className="w-4 h-4 text-muted-foreground" />
+                              <input
+                                id="puestoVotacion"
+                                type="text"
+                                placeholder="Buscar puesto..."
+                                value={searchPuesto}
+                                onChange={(e) => setSearchPuesto(e.target.value)}
+                                onClick={() => setShowPuestosDropdown(true)}
+                                onFocus={() => setShowPuestosDropdown(true)}
+                                className="flex-1 bg-transparent outline-none text-sm"
+                              />
+                              {searchPuesto && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSearchPuesto("")
+                                    setShowPuestosDropdown(true)
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground transition-colors"
+                                  title="Limpiar búsqueda"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+
+                            {showPuestosDropdown && (
+                              <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                                <div className="p-2 border-b border-border text-xs text-muted-foreground">
+                                  {puestosFiltered.length} {puestosFiltered.length === 1 ? "puesto encontrado" : "puestos encontrados"}
+                                </div>
+                                {puestosFiltered.length > 0 ? (
+                                  puestosFiltered.map((puesto) => (
+                                    <button
+                                      key={puesto.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setFormData({ ...formData, puestoVotacion: puesto.id })
+                                        setSearchPuesto("")
+                                        setShowPuestosDropdown(false)
+                                      }}
+                                      className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${
+                                        formData.puestoVotacion === puesto.id ? "bg-accent text-accent-foreground font-medium" : ""
+                                      }`}
+                                    >
+                                      {puesto.nombre}
+                                    </button>
+                                  ))
+                                ) : (
+                                  <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                    No se encontraron puestos
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {formData.puestoVotacion && (
+                              <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium">Puesto seleccionado:</p>
+                                  <p className="text-sm text-foreground font-medium">{puestoSeleccionado?.nombre}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({ ...formData, puestoVotacion: "" })
+                                    setSearchPuesto("")
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground ml-2"
+                                  title="Cambiar selección"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex justify-end gap-3 pt-4">
                         <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                           Cancelar
                         </Button>
-                        <Button type="submit" className="bg-primary text-primary-foreground">
-                          {editingVotante ? "Actualizar" : "Registrar"}
+                        <Button type="submit" className="bg-primary text-primary-foreground" disabled={loading}>
+                          {loading ? "Registrando..." : editingVotante ? "Actualizar" : "Registrar"}
                         </Button>
                       </div>
                     </form>
@@ -453,7 +510,7 @@ export default function RegistroVotosPage() {
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="w-12"></TableHead>
-                    <TableHead className="text-muted-foreground font-medium">ID</TableHead>
+                    <TableHead className="text-muted-foreground font-medium max-w-32 truncate">ID</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Votante</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Cédula</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Teléfono</TableHead>
@@ -479,17 +536,17 @@ export default function RegistroVotosPage() {
                         <TableCell>
                           <input type="checkbox" className="rounded border-border" />
                         </TableCell>
-                        <TableCell className="text-foreground font-medium">{votante.id}</TableCell>
+                        <TableCell className="text-foreground font-medium max-w-32 truncate" title={votante.id}>{votante.id}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="w-8 h-8">
                               <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                {votante.nombres.charAt(0)}{votante.apellidos.charAt(0)}
+                                {votante.nombre1.charAt(0)}{votante.apellido1.charAt(0)}
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="text-foreground font-medium text-sm">{votante.nombres}</p>
-                              <p className="text-muted-foreground text-xs">{votante.apellidos}</p>
+                              <p className="text-foreground font-medium text-sm">{votante.nombre1}</p>
+                              <p className="text-muted-foreground text-xs">{votante.apellido1}</p>
                             </div>
                           </div>
                         </TableCell>
