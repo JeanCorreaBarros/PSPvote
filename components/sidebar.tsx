@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Users,
   MapPin,
+  Map,
   BarChart3,
   Settings,
   LogOut,
@@ -60,6 +61,12 @@ const menuItems: MenuItem[] = [
     icon: MapPin, 
     label: "Puestos de Votación", 
     href: "/dashboard/puestos",
+    requiredRole: ["ADMIN"] // Solo ADMIN
+  },
+  { 
+    icon: Map, 
+    label: "Mapa de Líderes", 
+    href: "/dashboard/mapa-lideres",
     requiredRole: ["ADMIN"] // Solo ADMIN
   },
   { 
