@@ -43,14 +43,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { votosApi } from "@/lib/api"
+import { logout, getRoleFromToken } from "@/lib/auth"
 
-// Puestos de votación disponibles
-const PUESTOS_VOTACION = [
-  { id: "IE San José", nombre: "IE San José" },
-  { id: "IE La Paz", nombre: "IE La Paz" },
-  { id: "Coliseo Municipal", nombre: "Coliseo Municipal" },
-  { id: "Centro Cívico", nombre: "Centro Cívico" },
-]
+interface PuestoVotacion {
+  id: string
+  codUnic: string
+  departamento: string
+  municipio: string
+  puesto: string
+  mujeres: number
+  hombres: number
+  total: number
+  mesas: number
+  comuna: string | null
+  direccion: string
+  latitud: string
+  longitud: string
+  createdAt: string
+  updatedAt: string
+}
 
 interface Votante {
   id: string
@@ -68,13 +79,14 @@ interface Votante {
 // Los datos se cargan desde el API
 const initialVotantes: Votante[] = []
 
-const tabs = ["Todos", "Verificados", "Registrados", "Pendientes"]
+const tabs = ["Todos", /*"Verificados", "Registrados", "Pendientes"*/]
 
 const Loading = () => null
 
 export default function RegistroVotosPage() {
   const searchParams = useSearchParams()
   const [votantes, setVotantes] = useState<Votante[]>(initialVotantes)
+  const [puestosVotacion, setPuestosVotacion] = useState<PuestoVotacion[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [activeTab, setActiveTab] = useState("Todos")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -83,6 +95,15 @@ export default function RegistroVotosPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchPuesto, setSearchPuesto] = useState("")
   const [showPuestosDropdown, setShowPuestosDropdown] = useState(false)
+  const [loadingPuestos, setLoadingPuestos] = useState(true)
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+
+    useEffect(() => {
+    // Obtener el rol del token
+    const role = getRoleFromToken()
+    setUserRole(role)
+  }, [])
 
   const [formData, setFormData] = useState({
     nombre1: "",
@@ -93,6 +114,43 @@ export default function RegistroVotosPage() {
     barrio: "",
     puestoVotacion: "",
   })
+
+  // Cargar puestos de votación desde la API
+  useEffect(() => {
+    const fetchPuestos = async () => {
+      try {
+        setLoadingPuestos(true)
+        const token = localStorage.getItem('pspvote_token')
+        
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/puestos-votacion`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+        
+        if (!response.ok) {
+          throw new Error('Error al cargar los puestos de votación')
+        }
+        
+        const data = await response.json()
+        if (Array.isArray(data)) {
+          setPuestosVotacion(data)
+        }
+      } catch (err) {
+        console.error('Error al cargar puestos:', err)
+        toast.error('Error al cargar los puestos de votación')
+      } finally {
+        setLoadingPuestos(false)
+      }
+    }
+
+    fetchPuestos()
+  }, [])
 
   // Cargar votos desde la API
   useEffect(() => {
@@ -106,7 +164,7 @@ export default function RegistroVotosPage() {
           throw new Error('No hay token de autenticación')
         }
 
-        const response = await fetch('http://localhost:3000/api/votaciones', {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones`, {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
@@ -181,7 +239,7 @@ export default function RegistroVotosPage() {
           throw new Error('No hay token de autenticación')
         }
 
-        const response = await fetch('http://localhost:3000/api/votaciones', {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -256,11 +314,11 @@ export default function RegistroVotosPage() {
     setSearchPuesto("")
   }
 
-  const puestosFiltered = PUESTOS_VOTACION.filter((puesto) =>
-    puesto.nombre.toLowerCase().includes(searchPuesto.toLowerCase())
+  const puestosFiltered = puestosVotacion.filter((puesto) =>
+    puesto.puesto.toLowerCase().includes(searchPuesto.toLowerCase())
   )
 
-  const puestoSeleccionado = PUESTOS_VOTACION.find((p) => p.id === formData.puestoVotacion)
+  const puestoSeleccionado = puestosVotacion.find((p) => p.id === formData.puestoVotacion)
 
   const getStatusBadge = (estado: Votante["estado"]) => {
     const styles = {
@@ -302,7 +360,7 @@ export default function RegistroVotosPage() {
                   />
                 </div>
 
-                <Button variant="outline" size="sm" className="gap-2 bg-transparent">
+                <Button variant="outline" size="sm" className="gap-2 hidden bg-transparent">
                   <Filter className="w-4 h-4" />
                   Filtros
                 </Button>
@@ -312,12 +370,12 @@ export default function RegistroVotosPage() {
                   if (!open) resetForm()
                 }}>
                   <DialogTrigger asChild>
-                    <Button size="sm" className="gap-2 bg-primary text-primary-foreground">
+                    <Button size="sm" className="gap-2 w-full md:w-auto bg-primary text-primary-foreground">
                       <Plus className="w-4 h-4" />
                       Nuevo Registro
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl" onClick={() => setShowPuestosDropdown(false)}>
+                  <DialogContent className="md:max-w-2xl " onClick={() => setShowPuestosDropdown(false)}>
                     <DialogHeader>
                       <DialogTitle className="text-foreground">
                         {editingVotante ? "Editar Votante" : "Registrar Nuevo Votante"}
@@ -432,7 +490,7 @@ export default function RegistroVotosPage() {
                                         formData.puestoVotacion === puesto.id ? "bg-accent text-accent-foreground font-medium" : ""
                                       }`}
                                     >
-                                      {puesto.nombre}
+                                      {puesto.puesto}
                                     </button>
                                   ))
                                 ) : (
@@ -447,7 +505,7 @@ export default function RegistroVotosPage() {
                               <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
                                 <div>
                                   <p className="text-xs text-muted-foreground font-medium">Puesto seleccionado:</p>
-                                  <p className="text-sm text-foreground font-medium">{puestoSeleccionado?.nombre}</p>
+                                  <p className="text-sm text-foreground font-medium">{puestoSeleccionado?.puesto}</p>
                                 </div>
                                 <button
                                   type="button"
@@ -534,7 +592,7 @@ export default function RegistroVotosPage() {
                         className="border-border hover:bg-muted/50"
                       >
                         <TableCell>
-                          <input type="checkbox" className="rounded border-border" />
+                          <input type="checkbox" className="rounded border-border ml-5" />
                         </TableCell>
                         <TableCell className="text-foreground font-medium max-w-32 truncate" title={votante.id}>{votante.id}</TableCell>
                         <TableCell>
@@ -545,16 +603,16 @@ export default function RegistroVotosPage() {
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="text-foreground font-medium text-sm">{votante.nombre1}</p>
+                              <p className="text-foreground font-medium text-xs">{votante.nombre1}</p>
                               <p className="text-muted-foreground text-xs">{votante.apellido1}</p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-foreground">{votante.cedula}</TableCell>
-                        <TableCell className="text-foreground">{votante.telefono}</TableCell>
-                        <TableCell className="text-foreground text-sm">{votante.direccion}</TableCell>
-                        <TableCell className="text-foreground">{votante.barrio}</TableCell>
-                        <TableCell className="text-foreground">{votante.puestoVotacion}</TableCell>
+                        <TableCell className="text-foreground  max-w-20 truncate">{votante.telefono}</TableCell>
+                        <TableCell className="text-foreground  max-w-20 truncate text-sm">{votante.direccion}</TableCell>
+                        <TableCell className="text-foreground  max-w-32 truncate">{votante.barrio}</TableCell>
+                        <TableCell className="text-foreground  max-w-32 truncate">{votante.puestoVotacion}</TableCell>
                         <TableCell>{getStatusBadge(votante.estado)}</TableCell>
                         <TableCell className="text-muted-foreground">{votante.fechaRegistro}</TableCell>
                         <TableCell>
@@ -569,13 +627,15 @@ export default function RegistroVotosPage() {
                                 <Edit2 className="w-4 h-4 mr-2" />
                                 Editar
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDelete(votante.id)}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Eliminar
-                              </DropdownMenuItem>
+                              {userRole === "ADMIN" && (
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(votante.id)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { MapPin, Loader } from "lucide-react"
 import { AddPuestoDialog } from "@/components/add-puesto-dialog"
-import { PuestoDetailsDialog } from "@/components/puesto-details-dialog"
 
 interface Puesto {
   id: string
@@ -28,14 +27,11 @@ interface Puesto {
   updatedAt: string
 }
 
-
 export default function PuestosPage() {
   const [puestos, setPuestos] = useState<Puesto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedPuesto, setSelectedPuesto] = useState<Puesto | null>(null)
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
 
   useEffect(() => {
     const fetchPuestos = async () => {
@@ -98,6 +94,7 @@ export default function PuestosPage() {
           <AddPuestoDialog />
         </div>
 
+        {/* Barra de búsqueda */}
         <div className="mb-6">
           <input
             type="text"
@@ -178,15 +175,7 @@ export default function PuestosPage() {
                       </div>
                     </div>
                     <div className="pt-3 border-t border-border">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="w-full text-xs"
-                        onClick={() => {
-                          setSelectedPuesto(puesto)
-                          setIsDetailsOpen(true)
-                        }}
-                      >
+                      <Button variant="outline" size="sm" className="w-full text-xs">
                         Ver Detalles
                       </Button>
                     </div>
@@ -197,14 +186,6 @@ export default function PuestosPage() {
           </motion.div>
         )}
       </div>
-
-      {selectedPuesto && (
-        <PuestoDetailsDialog 
-          open={isDetailsOpen} 
-          onOpenChange={setIsDetailsOpen}
-          puesto={selectedPuesto} 
-        />
-      )}
     </div>
   )
 }

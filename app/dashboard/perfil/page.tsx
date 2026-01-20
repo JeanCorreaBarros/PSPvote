@@ -141,7 +141,9 @@ export default function PerfilPage() {
                 <div className="flex flex-col items-center gap-4">
                   <Avatar className="w-24 h-24">
                     <AvatarFallback className="bg-primary text-primary-foreground text-xl font-bold">
-                      {user.name?.charAt(0) || "U"}
+                      {user.role?.name === "LIDER" 
+                        ? user.leader?.name?.charAt(0)
+                        : user.username?.charAt(0) || user.name?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
                   <Button variant="outline" size="sm" className="gap-2">
@@ -152,22 +154,22 @@ export default function PerfilPage() {
 
                 {/* Información */}
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Nombre */}
+                  {/* ID */}
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                       <UserIcon className="w-4 h-4" />
-                      Nombre Completo
+                      ID de Usuario
                     </label>
-                    <p className="text-lg font-semibold text-foreground">{user.name || "No especificado"}</p>
+                    <p className="text-xs font-mono text-foreground break-all">{user.id || "No especificado"}</p>
                   </div>
 
-                  {/* Email */}
+                  {/* Username */}
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                      <Mail className="w-4 h-4" />
-                      Correo Electrónico
+                      <UserIcon className="w-4 h-4" />
+                      Nombre de Usuario
                     </label>
-                    <p className="text-lg font-semibold text-foreground">{user.email || "No especificado"}</p>
+                    <p className="text-lg font-semibold text-foreground">{user.username || "No especificado"}</p>
                   </div>
 
                   {/* Rol */}
@@ -178,7 +180,7 @@ export default function PerfilPage() {
                     </label>
                     <div className="flex items-center gap-2">
                       <Badge className="bg-primary text-primary-foreground">
-                        {user.role || "Usuario"}
+                        {user.role?.name || "Usuario"}
                       </Badge>
                     </div>
                   </div>
@@ -189,14 +191,41 @@ export default function PerfilPage() {
                       <Calendar className="w-4 h-4" />
                       Miembro desde
                     </label>
-                    <p className="text-lg font-semibold text-foreground">
-                      {new Date().toLocaleDateString("es-ES", {
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
+                    <p className="text-sm font-semibold text-foreground">
+                      {user.createdAt
+                        ? new Date(user.createdAt).toLocaleDateString("es-ES", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })
+                        : "No especificado"}
                     </p>
                   </div>
+
+                  {/* Role ID */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                      <Shield className="w-4 h-4" />
+                      Role ID
+                    </label>
+                    <p className="text-xs font-mono text-foreground break-all">{user.roleId || "No especificado"}</p>
+                  </div>
+
+                  {/* Leader Info - Solo si es LIDER */}
+                  {user.role?.name === "LIDER" && user.leader && (
+                    <div className="col-span-2">
+                      <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                        <UserIcon className="w-4 h-4" />
+                        Información del Líder Asignado
+                      </label>
+                      <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                        <p className="font-semibold text-foreground">Nombre: {user.leader.name}</p>
+                        <p className="text-sm text-muted-foreground">Teléfono: {user.leader.phone}</p>
+                        <p className="text-sm text-muted-foreground">Dirección: {user.leader.address}</p>
+                        <p className="text-xs font-mono text-muted-foreground break-all">ID: {user.leader.id}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -205,7 +234,7 @@ export default function PerfilPage() {
 
         {/* Card - Seguridad */}
         <motion.div variants={itemVariants}>
-          <Card className="mb-6">
+          <Card className="mb-6 hidden">
             <CardHeader>
               <CardTitle>Seguridad</CardTitle>
               <CardDescription>Gestiona tu acceso y contraseña</CardDescription>

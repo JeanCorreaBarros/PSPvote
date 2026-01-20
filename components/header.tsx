@@ -46,7 +46,7 @@ export function Header({ title }: HeaderProps) {
 
       <div className="flex items-center gap-4">
         {/* Search */}
-        <div className="relative hidden md:block">
+        <div className="relative hidden ">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="search"
@@ -70,11 +70,17 @@ export function Header({ title }: HeaderProps) {
             >
               <Avatar className="w-8 h-8">
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  {user?.name?.charAt(0) || "U"}
+                  {user?.role?.name === "LIDER" 
+                    ? user?.leader?.name?.charAt(0) 
+                    : user?.username?.charAt(0) 
+                    || user?.name?.charAt(0) 
+                    || "U"}
                 </AvatarFallback>
               </Avatar>
               <span className="text-sm font-medium text-foreground hidden md:block">
-                {user?.name || "Usuario"}
+                {user?.role?.name === "LIDER" 
+                  ? user?.leader?.name 
+                  : user?.username || user?.name || "Usuario"}
               </span>
             </Button>
           </DropdownMenuTrigger>

@@ -12,15 +12,21 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: 'PSPVote - Sistema de Votaciones',
   description: 'Sistema de gestión y registro de votaciones',
-  generator: 'v0.app',
+  generator: 'Jean Carlo Correa Barros',
+  authors: [{ name: 'Jean Carlo Correa Barros', url: 'https://jeancorrea.dev' }],
+  keywords: ['votaciones', 'sistema de votación', 'registro de votos', 'gestión electoral', 'PSPVote'],
   icons: {
     icon: [
       {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
+        url: '/PSPvote.ico',
+        sizes: 'any',
       },
       {
         url: '/icon-dark-32x32.png',
+        media: '(prefers-color-scheme: light)',
+      },
+      {
+        url: '/PSPvote.png',
         media: '(prefers-color-scheme: dark)',
       },
       {
@@ -28,7 +34,7 @@ export const metadata: Metadata = {
         type: 'image/svg+xml',
       },
     ],
-    apple: '/apple-icon.png',
+    apple: '/PSPvote.png',
   },
 }
 
@@ -40,6 +46,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="icon" href="/PSPvote.ico" sizes="any" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -62,7 +69,7 @@ export default function RootLayout({
         <ColorThemeProvider>
           {children}
         </ColorThemeProvider>
-        <Toaster 
+        <Toaster
           position="top-right"
           reverseOrder={false}
         />

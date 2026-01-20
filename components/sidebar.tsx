@@ -17,8 +17,8 @@ import {
   ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { logout } from "@/lib/auth"
-import { useState } from "react"
+import { logout, getRoleFromToken } from "@/lib/auth"
+import { useState, useEffect } from "react"
 
 interface SidebarProps {
   isCollapsed: boolean
@@ -29,24 +29,60 @@ interface MenuItem {
   icon: React.ComponentType<any>
   label: string
   href?: string
+  requiredRole?: string[] // Roles permitidos para este item
   submenu?: Array<{
     label: string
     href: string
+    requiredRole?: string[]
   }>
 }
 
 const menuItems: MenuItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
-  { icon: ClipboardList, label: "Registro de Votos", href: "/dashboard/registro-votos" },
-  { icon: Users, label: "Votantes", href: "/dashboard/votantes" },
-  { icon: MapPin, label: "Puestos de Votación", href: "/dashboard/puestos" },
-  { icon: BarChart3, label: "Reportes", href: "/dashboard/reportes" },
+  { 
+    icon: LayoutDashboard, 
+    label: "Dashboard", 
+    href: "/dashboard",
+    requiredRole: ["ADMIN", "LIDER"] // Ambos roles pueden ver
+  },
+  { 
+    icon: ClipboardList, 
+    label: "Registro de Votos", 
+    href: "/dashboard/registro-votos",
+    requiredRole: ["ADMIN", "LIDER"] // Ambos roles pueden ver
+  },
+ /* { 
+    icon: Users, 
+    label: "Votantes", 
+    href: "/dashboard/votantes",
+    requiredRole: ["ADMIN"] // Solo ADMIN
+  },*/
+  { 
+    icon: MapPin, 
+    label: "Puestos de Votación", 
+    href: "/dashboard/puestos",
+    requiredRole: ["ADMIN"] // Solo ADMIN
+  },
+  { 
+    icon: BarChart3, 
+    label: "Reportes", 
+    href: "/dashboard/reportes",
+    requiredRole: ["ADMIN"] // Solo ADMIN
+  },
   {
     icon: Settings,
     label: "Configuración",
+    requiredRole: ["ADMIN"], // Solo ADMIN
     submenu: [
-      { label: "Configuración", href: "/dashboard/configuracion" },
-      { label: "Usuarios", href: "/dashboard/configuracion/usuarios" },
+      { 
+        label: "Configuración", 
+        href: "/dashboard/configuracion",
+        requiredRole: ["ADMIN"]
+      },
+      { 
+        label: "Usuarios", 
+        href: "/dashboard/configuracion/usuarios",
+        requiredRole: ["ADMIN"]
+      },
     ],
   },
 ]
@@ -55,6 +91,13 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Obtener el rol del token
+    const role = getRoleFromToken()
+    setUserRole(role)
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -63,6 +106,23 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
   const toggleSubmenu = (label: string) => {
     setExpandedMenu(expandedMenu === label ? null : label)
+  }
+
+  // Filtrar items del menú según el rol del usuario
+  const filteredMenuItems = menuItems.filter((item) => {
+    if (!item.requiredRole) return true
+    if (!userRole) return false
+    return item.requiredRole.includes(userRole)
+  })
+
+  // Filtrar submenú según el rol
+  const getFilteredSubmenu = (submenu: MenuItem["submenu"]) => {
+    if (!submenu) return []
+    return submenu.filter((item) => {
+      if (!item.requiredRole) return true
+      if (!userRole) return false
+      return item.requiredRole.includes(userRole)
+    })
   }
 
   const sidebarVariants = {
@@ -121,8 +181,9 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 py-4 overflow-y-auto">
         <ul className="space-y-1 px-3">
-          {menuItems.map((item) => {
-            const hasSubmenu = item.submenu && item.submenu.length > 0
+          {filteredMenuItems.map((item) => {
+            const submenuItems = getFilteredSubmenu(item.submenu)
+            const hasSubmenu = submenuItems && submenuItems.length > 0
             const isExpanded = expandedMenu === item.label
             const isActive = hasSubmenu
               ? pathname.startsWith("/dashboard/configuracion")
@@ -184,7 +245,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                         transition={{ duration: 0.2 }}
                         className="mt-1 space-y-1 pl-6"
                       >
-                        {item.submenu?.map((subitem) => {
+                        {submenuItems?.map((subitem) => {
                           const isSubActive = pathname === subitem.href
                           return (
                             <li key={subitem.href}>

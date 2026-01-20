@@ -8,7 +8,7 @@ import { motion } from "framer-motion"
 import { Sidebar } from "@/components/sidebar"
 import { BottomNav } from "@/components/bottom-nav"
 import { useIsMobile } from "@/hooks/use-mobile"
-import { getUser } from "@/lib/auth"
+import { getUser, getRoleFromToken } from "@/lib/auth"
 
 export default function DashboardLayout({
   children,
@@ -19,12 +19,17 @@ export default function DashboardLayout({
   const isMobile = useIsMobile()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     const user = getUser()
+    const role = getRoleFromToken()
+    
     if (!user) {
       router.push("/")
     } else {
+      setUserRole(role)
+      console.log(`✅ Usuario autenticado: ${user.username || user.email} | Rol: ${role || 'SIN ROL'}`)
       setIsLoading(false)
     }
   }, [router])
