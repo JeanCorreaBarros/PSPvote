@@ -44,6 +44,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { votosApi } from "@/lib/api"
 import { logout, getRoleFromToken } from "@/lib/auth"
+import { HelpButton } from "@/components/help-button"
+import { registroVotosTour, registrarVotanteTour } from "@/lib/tours-config"
 
 interface PuestoVotacion {
   id: string
@@ -346,10 +348,10 @@ export default function RegistroVotosPage() {
         <Card className="border-border">
           <CardHeader className="border-b border-border">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <CardTitle className="text-foreground text-xl">Listado de Votantes</CardTitle>
+              <CardTitle id="registro-titulo" className="text-foreground text-xl">Listado de Votantes</CardTitle>
               
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                <div className="relative w-full sm:w-64">
+                <div id="registro-busqueda" className="relative w-full sm:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     type="search"
@@ -365,12 +367,19 @@ export default function RegistroVotosPage() {
                   Filtros
                 </Button>
 
+                <HelpButton
+                  tours={[
+                    { name: "Guía de Registro de Votos", steps: registroVotosTour },
+                    { name: "Registrar Nuevo Votante", steps: registrarVotanteTour },
+                  ]}
+                />
+
                 <Dialog open={isDialogOpen} onOpenChange={(open) => {
                   setIsDialogOpen(open)
                   if (!open) resetForm()
                 }}>
                   <DialogTrigger asChild>
-                    <Button size="sm" className="gap-2 w-full md:w-auto bg-primary text-primary-foreground">
+                    <Button id="registro-nuevo-btn" size="sm" className="gap-2 w-full md:w-auto bg-primary text-primary-foreground">
                       <Plus className="w-4 h-4" />
                       Nuevo Registro
                     </Button>
@@ -384,18 +393,18 @@ export default function RegistroVotosPage() {
                     <form onSubmit={handleSubmit} className="space-y-4 mt-4" onClick={(e) => e.stopPropagation()}>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="nombre1">Nombres</Label>
+                          <Label htmlFor="form-nombres">Nombres</Label>
                           <Input
-                            id="nombre1"
+                            id="form-nombres"
                             value={formData.nombre1}
                             onChange={(e) => setFormData({ ...formData, nombre1: e.target.value })}
                             required
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="apellido1">Apellidos</Label>
+                          <Label htmlFor="form-apellidos">Apellidos</Label>
                           <Input
-                            id="apellido1"
+                            id="form-apellidos"
                             value={formData.apellido1}
                             onChange={(e) => setFormData({ ...formData, apellido1: e.target.value })}
                             required
@@ -404,18 +413,18 @@ export default function RegistroVotosPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="cedula">Cédula</Label>
+                          <Label htmlFor="form-cedula">Cédula</Label>
                           <Input
-                            id="cedula"
+                            id="form-cedula"
                             value={formData.cedula}
                             onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
                             required
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="telefono">Teléfono</Label>
+                          <Label htmlFor="form-telefono">Teléfono</Label>
                           <Input
-                            id="telefono"
+                            id="form-telefono"
                             value={formData.telefono}
                             onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
                             required
@@ -423,9 +432,9 @@ export default function RegistroVotosPage() {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="direccion">Dirección</Label>
+                        <Label htmlFor="form-direccion">Dirección</Label>
                         <Input
-                          id="direccion"
+                          id="form-direccion"
                           value={formData.direccion}
                           onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
                           required
@@ -433,15 +442,15 @@ export default function RegistroVotosPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="barrio">Barrio</Label>
+                          <Label htmlFor="form-barrio">Barrio</Label>
                           <Input
-                            id="barrio"
+                            id="form-barrio"
                             value={formData.barrio}
                             onChange={(e) => setFormData({ ...formData, barrio: e.target.value })}
                             required
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div id="form-puesto" className="space-y-2">
                           <Label htmlFor="puestoVotacion">Puesto de Votación</Label>
                           <div className="relative">
                             <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
@@ -527,7 +536,7 @@ export default function RegistroVotosPage() {
                         <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                           Cancelar
                         </Button>
-                        <Button type="submit" className="bg-primary text-primary-foreground" disabled={loading}>
+                        <Button id="form-submit" type="submit" className="bg-primary text-primary-foreground" disabled={loading}>
                           {loading ? "Registrando..." : editingVotante ? "Actualizar" : "Registrar"}
                         </Button>
                       </div>
@@ -566,7 +575,7 @@ export default function RegistroVotosPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-border hover:bg-transparent">
+                  <TableRow id="registro-tabla-header" className="border-border hover:bg-transparent">
                     <TableHead className="w-12"></TableHead>
                     <TableHead className="text-muted-foreground font-medium max-w-32 truncate">ID</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Votante</TableHead>
@@ -580,7 +589,7 @@ export default function RegistroVotosPage() {
                     <TableHead className="text-muted-foreground font-medium w-12">Acción</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody id="registro-tabla">
                   <AnimatePresence mode="popLayout">
                     {filteredVotantes.map((votante, index) => (
                       <motion.tr
@@ -595,14 +604,14 @@ export default function RegistroVotosPage() {
                           <input type="checkbox" className="rounded border-border ml-5" />
                         </TableCell>
                         <TableCell className="text-foreground font-medium max-w-32 truncate" title={votante.id}>{votante.id}</TableCell>
-                        <TableCell>
+                        <TableCell id="tabla-avatar">
                           <div className="flex items-center gap-3">
                             <Avatar className="w-8 h-8">
                               <AvatarFallback className="bg-primary/10 text-primary text-xs">
                                 {votante.nombre1.charAt(0)}{votante.apellido1.charAt(0)}
                               </AvatarFallback>
                             </Avatar>
-                            <div>
+                            <div id="tabla-nombre">
                               <p className="text-foreground font-medium text-xs">{votante.nombre1}</p>
                               <p className="text-muted-foreground text-xs">{votante.apellido1}</p>
                             </div>
@@ -613,9 +622,9 @@ export default function RegistroVotosPage() {
                         <TableCell className="text-foreground  max-w-20 truncate text-sm">{votante.direccion}</TableCell>
                         <TableCell className="text-foreground  max-w-32 truncate">{votante.barrio}</TableCell>
                         <TableCell className="text-foreground  max-w-32 truncate">{votante.puestoVotacion}</TableCell>
-                        <TableCell>{getStatusBadge(votante.estado)}</TableCell>
+                        <TableCell id="tabla-estado">{getStatusBadge(votante.estado)}</TableCell>
                         <TableCell className="text-muted-foreground">{votante.fechaRegistro}</TableCell>
-                        <TableCell>
+                        <TableCell id="tabla-acciones">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8">

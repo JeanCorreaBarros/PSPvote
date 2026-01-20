@@ -144,7 +144,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       className="h-screen bg-sidebar border-r border-sidebar-border flex flex-col fixed left-0 top-0 z-40"
     >
       {/* Logo */}
-      <div className="h-16 flex items-center px-4 border-b border-sidebar-border">
+      <div id="sidebar-logo" className="h-16 flex items-center px-4 border-b border-sidebar-border">
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shrink-0">
             <Vote className="w-5 h-5 text-primary-foreground" />
@@ -217,6 +217,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                   )}
                   <item.icon className={cn("w-5 h-5 shrink-0", isActive && "text-primary")} />
                   <motion.span
+                    id={`menu-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                     variants={labelVariants}
                     animate={isCollapsed ? "hidden" : "visible"}
                     transition={{ duration: 0.2 }}
