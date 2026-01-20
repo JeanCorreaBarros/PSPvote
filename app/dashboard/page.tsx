@@ -4,6 +4,7 @@ import { motion } from "framer-motion"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardList, Users, MapPin, TrendingUp } from "lucide-react"
+import { sidebarTour } from "@/lib/tours-config"
 
 const stats = [
   { title: "Total Votos", value: "12,458", icon: ClipboardList, change: "+12%", color: "text-primary" },
@@ -30,7 +31,7 @@ const itemVariants = {
 export default function DashboardPage() {
   return (
     <div className="min-h-screen">
-      <Header title="Dashboard" />
+      <Header title="Dashboard" tours={[{ name: "Guía del Sidebar", steps: sidebarTour }]} />
       
       <div className="p-6">
         <motion.div

@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select"
 import { AlertCircle, Eye, EyeOff } from "lucide-react"
 import { usersApi } from "@/lib/api"
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
+
 
 interface AddUsuarioDialogProps {
   open: boolean
@@ -169,6 +171,9 @@ export function AddUsuarioDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
+           <VisuallyHidden>
+                        <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+                    </VisuallyHidden>
           <DialogTitle>Crear Nuevo Usuario</DialogTitle>
           <DialogDescription>
             Completa el formulario para agregar un nuevo usuario al sistema

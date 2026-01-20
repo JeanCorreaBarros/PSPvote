@@ -7,6 +7,7 @@ import toast from "react-hot-toast"
 
 import { motion, AnimatePresence } from "framer-motion"
 import { Header } from "@/components/header"
+import { HelpButton } from "@/components/help-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,8 +45,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { votosApi } from "@/lib/api"
 import { logout, getRoleFromToken } from "@/lib/auth"
-import { HelpButton } from "@/components/help-button"
-import { registroVotosTour, registrarVotanteTour } from "@/lib/tours-config"
+import { registroVotosTour, registrarVotanteTour, registrarVotanteModalTour } from "@/lib/tours-config"
+import { useRegistrarVotanteTour } from "@/hooks/use-registrar-votante-tour"
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
+
 
 interface PuestoVotacion {
   id: string
@@ -100,8 +103,10 @@ export default function RegistroVotosPage() {
   const [loadingPuestos, setLoadingPuestos] = useState(true)
   const [userRole, setUserRole] = useState<string | null>(null)
 
+  // Hook para el tour automático del modal
+  useRegistrarVotanteTour(isDialogOpen && !editingVotante)
 
-    useEffect(() => {
+  useEffect(() => {
     // Obtener el rol del token
     const role = getRoleFromToken()
     setUserRole(role)
@@ -123,7 +128,7 @@ export default function RegistroVotosPage() {
       try {
         setLoadingPuestos(true)
         const token = localStorage.getItem('pspvote_token')
-        
+
         if (!token) {
           throw new Error('No hay token de autenticación')
         }
@@ -134,11 +139,11 @@ export default function RegistroVotosPage() {
             'Authorization': `Bearer ${token}`,
           },
         })
-        
+
         if (!response.ok) {
           throw new Error('Error al cargar los puestos de votación')
         }
-        
+
         const data = await response.json()
         if (Array.isArray(data)) {
           setPuestosVotacion(data)
@@ -161,7 +166,7 @@ export default function RegistroVotosPage() {
         setLoading(true)
         setError(null)
         const token = localStorage.getItem('pspvote_token')
-        
+
         if (!token) {
           throw new Error('No hay token de autenticación')
         }
@@ -176,7 +181,7 @@ export default function RegistroVotosPage() {
           throw new Error('Error al cargar los votos')
         }
         const data = await response.json()
-        
+
         if (Array.isArray(data)) {
           const votantesFormateados = data.map((votante: any) => ({
             id: votante.id,
@@ -222,7 +227,7 @@ export default function RegistroVotosPage() {
     e.preventDefault()
     try {
       setLoading(true)
-      
+
       if (editingVotante) {
         // Para edición, solo actualizar localmente
         setVotantes(
@@ -236,7 +241,7 @@ export default function RegistroVotosPage() {
       } else {
         // Para registro nuevo, consumir el endpoint
         const token = localStorage.getItem('pspvote_token')
-        
+
         if (!token) {
           throw new Error('No hay token de autenticación')
         }
@@ -255,7 +260,7 @@ export default function RegistroVotosPage() {
         }
 
         const nuevoVotante = await response.json()
-        
+
         // Agregar el nuevo votante a la tabla
         const votanteFormateado: Votante = {
           id: nuevoVotante.id,
@@ -269,11 +274,11 @@ export default function RegistroVotosPage() {
           estado: "registrado",
           fechaRegistro: new Date(nuevoVotante.createdAt).toLocaleDateString("es-CO"),
         }
-        
+
         setVotantes([votanteFormateado, ...votantes])
         toast.success('¡Votante registrado con éxito!')
       }
-      
+
       resetForm()
       setIsDialogOpen(false)
     } catch (err) {
@@ -342,14 +347,16 @@ export default function RegistroVotosPage() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Registro de Votos" />
+      <Header title="Registro de Votos" tours={[
+        { name: "Guía de Registro de Votos", steps: registroVotosTour },
+      ]} />
 
       <div className="p-6">
         <Card className="border-border">
           <CardHeader className="border-b border-border">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <CardTitle id="registro-titulo" className="text-foreground text-xl">Listado de Votantes</CardTitle>
-              
+
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div id="registro-busqueda" className="relative w-full sm:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -367,13 +374,6 @@ export default function RegistroVotosPage() {
                   Filtros
                 </Button>
 
-                <HelpButton
-                  tours={[
-                    { name: "Guía de Registro de Votos", steps: registroVotosTour },
-                    { name: "Registrar Nuevo Votante", steps: registrarVotanteTour },
-                  ]}
-                />
-
                 <Dialog open={isDialogOpen} onOpenChange={(open) => {
                   setIsDialogOpen(open)
                   if (!open) resetForm()
@@ -385,10 +385,20 @@ export default function RegistroVotosPage() {
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="md:max-w-2xl " onClick={() => setShowPuestosDropdown(false)}>
-                    <DialogHeader>
-                      <DialogTitle className="text-foreground">
+                    <VisuallyHidden>
+                      <DialogTitle id="modal-titulo-votante">
                         {editingVotante ? "Editar Votante" : "Registrar Nuevo Votante"}
                       </DialogTitle>
+                    </VisuallyHidden>
+
+
+                    <DialogHeader className="flex flex-row items-center justify-between pr-8">
+                      <h2 className="text-lg font-semibold text-foreground">
+                        {editingVotante ? "Editar Votante" : "Registrar Nuevo Votante"}
+                      </h2>
+                      {!editingVotante && (
+                        <HelpButton tours={[{ name: "Guía del Modal", steps: registrarVotanteModalTour }]} />
+                      )}
                     </DialogHeader>
                     <form onSubmit={handleSubmit} className="space-y-4 mt-4" onClick={(e) => e.stopPropagation()}>
                       <div className="grid grid-cols-2 gap-4">
@@ -495,9 +505,8 @@ export default function RegistroVotosPage() {
                                         setSearchPuesto("")
                                         setShowPuestosDropdown(false)
                                       }}
-                                      className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${
-                                        formData.puestoVotacion === puesto.id ? "bg-accent text-accent-foreground font-medium" : ""
-                                      }`}
+                                      className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${formData.puestoVotacion === puesto.id ? "bg-accent text-accent-foreground font-medium" : ""
+                                        }`}
                                     >
                                       {puesto.puesto}
                                     </button>
@@ -552,11 +561,10 @@ export default function RegistroVotosPage() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors relative ${
-                    activeTab === tab
+                  className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === tab
                       ? "text-primary"
                       : "text-muted-foreground hover:text-foreground"
-                  }`}
+                    }`}
                 >
                   {tab}
                   {activeTab === tab && (

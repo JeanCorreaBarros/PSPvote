@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { HelpCircle } from "lucide-react"
-import { useDriverTour, TourStep } from "@/hooks/use-driver-tour"
+import { useDriverTour, TourStep, saveTourCookie } from "@/hooks/use-driver-tour"
 
 interface TourGuide {
   name: string
@@ -23,6 +23,16 @@ interface HelpButtonProps {
 
 export function HelpButton({ tours }: HelpButtonProps) {
   const { startTour } = useDriverTour()
+
+  const handleStartTour = (steps: TourStep[], tourName: string) => {
+    startTour(steps, tourName)
+    
+    // Guardar que el tour fue visto cuando se completa
+    // Se guarda en cookie para que no se repita automáticamente
+    setTimeout(() => {
+      saveTourCookie(tourName)
+    }, 500)
+  }
 
   return (
     <DropdownMenu>
@@ -42,7 +52,7 @@ export function HelpButton({ tours }: HelpButtonProps) {
         {tours.map((tour) => (
           <DropdownMenuItem
             key={tour.name}
-            onClick={() => startTour(tour.steps, tour.name)}
+            onClick={() => handleStartTour(tour.steps, tour.name)}
             className="cursor-pointer"
           >
             {tour.name}

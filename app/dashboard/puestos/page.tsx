@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { MapPin, Loader } from "lucide-react"
 import { AddPuestoDialog } from "@/components/add-puesto-dialog"
 import { PuestoDetailsDialog } from "@/components/puesto-details-dialog"
+import { puestosTour } from "@/lib/tours-config"
 
 interface Puesto {
   id: string
@@ -87,18 +88,22 @@ export default function PuestosPage() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Puestos de Votación" />
+      <Header title="Puestos de Votación" tours={[{ name: "Guía de Puestos", steps: puestosTour }]} />
 
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Puestos de Votación</h2>
+            <h2 id="puestos-titulo" className="text-lg font-semibold text-foreground">Puestos de Votación</h2>
             <p className="text-sm text-muted-foreground">{filteredPuestos.length} puestos registrados</p>
           </div>
-          <AddPuestoDialog />
+          <div className="flex items-center gap-3">
+            <div id="puestos-nuevo-btn">
+              <AddPuestoDialog />
+            </div>
+          </div>
         </div>
 
-        <div className="mb-6">
+        <div id="puestos-busqueda" className="mb-6">
           <input
             type="text"
             placeholder="Buscar por nombre, dirección, municipio o código..."
@@ -134,6 +139,7 @@ export default function PuestosPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+            id="puestos-tabla"
           >
             {filteredPuestos.map((puesto, index) => (
               <motion.div

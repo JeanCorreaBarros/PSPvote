@@ -245,3 +245,185 @@ export const tablaVotantesTour: TourStep[] = [
     },
   },
 ]
+
+// Tours para Reportes
+export const reportesTour: TourStep[] = [
+  {
+    element: "#reportes-titulo",
+    popover: {
+      title: "Página de Reportes",
+      description:
+        "Aquí puedes generar y descargar reportes detallados sobre las votaciones.",
+      side: "bottom",
+      align: "start",
+    },
+  },
+  {
+    element: "#estadisticas-cards",
+    popover: {
+      title: "Estadísticas Generales",
+      description:
+        "Muestra un resumen rápido de los registros totales, verificados, pendientes y rechazados.",
+      side: "bottom",
+      align: "center",
+    },
+  },
+  {
+    element: "#reportes-list",
+    popover: {
+      title: "Reportes Disponibles",
+      description:
+        "Lista de reportes que puedes generar: Resumen General, Registro por Puestos, Análisis de Participación y Listado de Votantes.",
+      side: "top",
+      align: "center",
+    },
+  },
+  {
+    element: "#reporte-card",
+    popover: {
+      title: "Tarjeta de Reporte",
+      description:
+        "Haz clic en cualquier reporte para descargar o visualizar en Excel o PDF.",
+      side: "left",
+      align: "center",
+    },
+  },
+]
+
+// Tours para Puestos de Votación
+export const puestosTour: TourStep[] = [
+  {
+    element: "#puestos-titulo",
+    popover: {
+      title: "Puestos de Votación",
+      description:
+        "Administra todos los puestos de votación de tu jurisdicción.",
+      side: "bottom",
+      align: "start",
+    },
+  },
+  {
+    element: "#puestos-busqueda",
+    popover: {
+      title: "Buscar Puesto",
+      description:
+        "Utiliza este campo para buscar un puesto por nombre, municipio o código.",
+      side: "bottom",
+      align: "center",
+    },
+  },
+  {
+    element: "#puestos-nuevo-btn",
+    popover: {
+      title: "Agregar Nuevo Puesto",
+      description:
+        "Haz clic para crear un nuevo puesto de votación.",
+      side: "bottom",
+      align: "end",
+    },
+  },
+  {
+    element: "#puestos-tabla",
+    popover: {
+      title: "Tabla de Puestos",
+      description:
+        "Visualiza todos los puestos registrados con información como código, ubicación, cantidad de mesas y estado.",
+      side: "top",
+      align: "center",
+    },
+  },
+]
+
+// Tour para Modal de Registrar Votante (automático)
+export const registrarVotanteModalTour: TourStep[] = [
+  {
+    element: "#modal-titulo-votante",
+    popover: {
+      title: "Registrar Nuevo Votante",
+      description:
+        "Completa este formulario para registrar un nuevo votante en el sistema.",
+      side: "bottom",
+      align: "center",
+    },
+  },
+  {
+    element: "#form-nombres",
+    popover: {
+      title: "Nombres",
+      description:
+        "Ingresa los nombres completos del votante. Este campo es obligatorio.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-apellidos",
+    popover: {
+      title: "Apellidos",
+      description:
+        "Ingresa los apellidos del votante. Este campo es obligatorio.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-cedula",
+    popover: {
+      title: "Cédula de Identidad",
+      description:
+        "Ingresa el número de cédula único del votante. Sirve como identificador principal.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-telefono",
+    popover: {
+      title: "Teléfono",
+      description:
+        "Número de contacto del votante (opcional).",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-direccion",
+    popover: {
+      title: "Dirección",
+      description:
+        "Dirección residencial completa (opcional pero recomendado).",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-barrio",
+    popover: {
+      title: "Barrio",
+      description:
+        "Especifica el barrio o localidad.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-puesto",
+    popover: {
+      title: "Puesto de Votación",
+      description:
+        "Selecciona el puesto de votación asignado. Campo obligatorio.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-submit",
+    popover: {
+      title: "Guardar Votante",
+      description:
+        "Haz clic para guardar el registro del votante en el sistema.",
+      side: "top",
+      align: "center",
+    },
+  },
+]

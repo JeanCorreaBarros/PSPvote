@@ -1,31 +1,30 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { usePathname } from "next/navigation"
-import { useDriverTour } from "@/hooks/use-driver-tour"
+import { useDriverTour, isTourCompleted } from "@/hooks/use-driver-tour"
 import { sidebarTour } from "@/lib/tours-config"
 
 /**
  * Componente que maneja el tour de bienvenida del sidebar
- * Se muestra una sola vez por sesión
+ * Se muestra automáticamente la primera vez que entras al dashboard
+ * Se guarda en cookie y no se muestra de nuevo a menos que lo hagas manualmente
  */
 export function SidebarTourTrigger() {
   const pathname = usePathname()
   const { startTour } = useDriverTour()
-  const [hasShownTour, setHasShownTour] = useState(true) // Descomenta para mostrar tour
 
   useEffect(() => {
-    // Solo mostrar el tour en la primera carga del dashboard
-    if (pathname === "/dashboard" && !hasShownTour) {
+    // Mostrar el tour solo en la primera carga del dashboard y si no está completado
+    if (pathname === "/dashboard" && !isTourCompleted("sidebar-welcome")) {
       const timer = setTimeout(() => {
+        console.log("🎬 Iniciando tour de bienvenida automático...")
         startTour(sidebarTour, "sidebar-welcome")
-        setHasShownTour(true)
-        localStorage.setItem("sidebarTourShown", "true")
-      }, 1000)
+      }, 1500)
 
       return () => clearTimeout(timer)
     }
-  }, [pathname, hasShownTour, startTour])
+  }, [pathname, startTour])
 
   return null
 }
