@@ -68,7 +68,7 @@ export const votosApi = {
 // Auth endpoints
 export const authApi = {
   login: (credentials: { username: string; password: string }) =>
-    apiCall('https://paraquesoledadprogrese.com/api/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
+    apiCall('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   logout: () => {
     localStorage.removeItem('pspvote_token')
     localStorage.removeItem('pspvote_user')
