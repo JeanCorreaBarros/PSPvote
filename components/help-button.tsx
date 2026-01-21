@@ -40,7 +40,7 @@ export function HelpButton({ tours }: HelpButtonProps) {
         <Button
           variant="outline"
           size="icon"
-          className="rounded-full"
+          className="rounded-full cursor-pointer bg-primary/5 hover:bg-primary/10 border-0"
           title="Ver guías de ayuda"
         >
           <HelpCircle className="w-5 h-5" />

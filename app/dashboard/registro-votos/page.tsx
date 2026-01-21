@@ -47,7 +47,6 @@ import { votosApi } from "@/lib/api"
 import { logout, getRoleFromToken } from "@/lib/auth"
 import { registroVotosTour, registrarVotanteTour, registrarVotanteModalTour } from "@/lib/tours-config"
 import { useRegistrarVotanteTour } from "@/hooks/use-registrar-votante-tour"
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 
 
 interface PuestoVotacion {
@@ -68,10 +67,34 @@ interface PuestoVotacion {
   updatedAt: string
 }
 
+interface Recomendado {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface Programa {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface ProgramaOpcion {
+  label: string
+  programaId: string
+  sedeId: string | null
+  tipoVinculacionId: string
+  esPago: boolean
+}
+
 interface Votante {
   id: string
   nombre1: string
+  nombre2?: string
   apellido1: string
+  apellido2?: string
   cedula: string
   telefono: string
   direccion: string
@@ -79,6 +102,8 @@ interface Votante {
   puestoVotacion: string
   estado: "registrado" | "verificado" | "pendiente"
   fechaRegistro: string
+  recomendado?: string
+  programa?: string
 }
 
 // Los datos se cargan desde el API
@@ -92,6 +117,9 @@ export default function RegistroVotosPage() {
   const searchParams = useSearchParams()
   const [votantes, setVotantes] = useState<Votante[]>(initialVotantes)
   const [puestosVotacion, setPuestosVotacion] = useState<PuestoVotacion[]>([])
+  const [recomendados, setRecomendados] = useState<Recomendado[]>([])
+  const [programas, setProgramas] = useState<Programa[]>([])
+  const [programasOpciones, setProgramasOpciones] = useState<ProgramaOpcion[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [activeTab, setActiveTab] = useState("Todos")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -99,9 +127,16 @@ export default function RegistroVotosPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchPuesto, setSearchPuesto] = useState("")
+  const [searchRecomendado, setSearchRecomendado] = useState("")
+  const [searchPrograma, setSearchPrograma] = useState("")
   const [showPuestosDropdown, setShowPuestosDropdown] = useState(false)
+  const [showRecomendadosDropdown, setShowRecomendadosDropdown] = useState(false)
+  const [showProgramasDropdown, setShowProgramasDropdown] = useState(false)
   const [loadingPuestos, setLoadingPuestos] = useState(true)
+  const [loadingRecomendados, setLoadingRecomendados] = useState(true)
+  const [loadingProgramas, setLoadingProgramas] = useState(true)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string>("")
 
   // Hook para el tour automático del modal
   useRegistrarVotanteTour(isDialogOpen && !editingVotante)
@@ -110,16 +145,34 @@ export default function RegistroVotosPage() {
     // Obtener el rol del token
     const role = getRoleFromToken()
     setUserRole(role)
+    
+    // Obtener el nombre del usuario del sessionStorage
+    const userDataStr = sessionStorage.getItem('pspvote_user')
+    if (userDataStr) {
+      try {
+        const userData = JSON.parse(userDataStr)
+        setUserName(userData.leader?.name || userData.username || "sin leader asociado")
+      } catch (err) {
+        console.error('Error al parsear datos del usuario:', err)
+      }
+    }
   }, [])
 
   const [formData, setFormData] = useState({
     nombre1: "",
+    nombre2: "",
     apellido1: "",
+    apellido2: "",
     cedula: "",
     telefono: "",
     direccion: "",
     barrio: "",
     puestoVotacion: "",
+    recommendedById: "",
+    programaId: "",
+    sedeId: "",
+    tipoVinculacionId: "",
+    esPago: Boolean(false),
   })
 
   // Cargar puestos de votación desde la API
@@ -159,6 +212,80 @@ export default function RegistroVotosPage() {
     fetchPuestos()
   }, [])
 
+  // Cargar recomendados desde la API
+  useEffect(() => {
+    const fetchRecomendados = async () => {
+      try {
+        setLoadingRecomendados(true)
+        const token = localStorage.getItem('pspvote_token')
+
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leaders`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error('Error al cargar los recomendados')
+        }
+
+        const data = await response.json()
+        if (Array.isArray(data)) {
+          setRecomendados(data)
+        }
+      } catch (err) {
+        console.error('Error al cargar recomendados:', err)
+        toast.error('Error al cargar los recomendados')
+      } finally {
+        setLoadingRecomendados(false)
+      }
+    }
+
+    fetchRecomendados()
+  }, [])
+
+  // Cargar opciones de programas desde la API
+  useEffect(() => {
+    const fetchProgramasOpciones = async () => {
+      try {
+        setLoadingProgramas(true)
+        const token = localStorage.getItem('pspvote_token')
+
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/programas/opciones`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error('Error al cargar las opciones de programas')
+        }
+
+        const data = await response.json()
+        if (Array.isArray(data)) {
+          setProgramasOpciones(data)
+        }
+      } catch (err) {
+        console.error('Error al cargar opciones de programas:', err)
+        toast.error('Error al cargar las opciones de programas')
+      } finally {
+        setLoadingProgramas(false)
+      }
+    }
+
+    fetchProgramasOpciones()
+  }, [])
+
   // Cargar votos desde la API
   useEffect(() => {
     const fetchVotos = async () => {
@@ -184,16 +311,18 @@ export default function RegistroVotosPage() {
 
         if (Array.isArray(data)) {
           const votantesFormateados = data.map((votante: any) => ({
-            id: votante.id,
-            nombre1: votante.nombre1 || '',
-            apellido1: votante.apellido1 || '',
-            cedula: votante.cedula,
-            telefono: votante.telefono,
-            direccion: votante.direccion,
-            barrio: votante.barrio,
-            puestoVotacion: votante.puestoVotacion,
+            id: votante.id || '',
+            nombre1: votante.nombre1 || 'Sin nombre',
+            nombre2: votante.nombre2 || undefined,
+            apellido1: votante.apellido1 || 'Sin apellido',
+            apellido2: votante.apellido2 || undefined,
+            cedula: votante.cedula || 'N/A',
+            telefono: votante.telefono || 'N/A',
+            direccion: votante.direccion || 'N/A',
+            barrio: votante.barrio || 'N/A',
+            puestoVotacion: votante.puestoVotacion || 'N/A',
             estado: "registrado" as const,
-            fechaRegistro: new Date(votante.createdAt).toLocaleDateString("es-CO"),
+            fechaRegistro: votante.createdAt ? new Date(votante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
           }))
           setVotantes(votantesFormateados)
         }
@@ -208,11 +337,30 @@ export default function RegistroVotosPage() {
     fetchVotos()
   }, [])
 
+  // Función para normalizar texto (remover tildes y convertir a minúsculas)
+  const normalizeText = (text: string | undefined | null) => {
+    if (!text) return ''
+    return text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+  }
+
+  // Función para dividir nombres o apellidos si contienen espacio
+  const splitNameFields = (fullName: string) => {
+    const parts = fullName.trim().split(/\s+/)
+    return {
+      first: parts[0] || '',
+      second: parts[1] || '',
+    }
+  }
+
   const filteredVotantes = votantes.filter((votante) => {
+    const normalizedSearch = normalizeText(searchTerm)
     const matchesSearch =
-      votante.nombre1.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      votante.apellido1.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      votante.cedula.includes(searchTerm)
+      normalizeText(votante.nombre1).includes(normalizedSearch) ||
+      normalizeText(votante.apellido1).includes(normalizedSearch) ||
+      (votante.cedula && votante.cedula.includes(searchTerm))
 
     const matchesTab =
       activeTab === "Todos" ||
@@ -225,15 +373,53 @@ export default function RegistroVotosPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validación básica
+    if (!formData.nombre1 || !formData.apellido1 || !formData.cedula || !formData.puestoVotacion) {
+      toast.error('Por favor completa los campos requeridos')
+      return
+    }
+
+
     try {
       setLoading(true)
+
+      // Dividir nombres y apellidos si contienen espacios
+      const nombreSplit = splitNameFields(formData.nombre1 || '')
+      const apellidoSplit = splitNameFields(formData.apellido1 || '')
+
+      const dataToSend = {
+        nombre1: nombreSplit.first,
+        nombre2: nombreSplit.second || undefined,
+        apellido1: apellidoSplit.first,
+        apellido2: apellidoSplit.second || undefined,
+        cedula: formData.cedula || '',
+        telefono: formData.telefono || '',
+        direccion: formData.direccion || '',
+        barrio: formData.barrio || '',
+        puestoVotacion: formData.puestoVotacion || '',
+        recommendedById: formData.recommendedById || undefined,
+        programaId: formData.programaId || undefined,
+        sedeId: formData.sedeId || undefined,
+        tipoId: formData.tipoVinculacionId || undefined,
+        esPago: formData.esPago,
+      }
 
       if (editingVotante) {
         // Para edición, solo actualizar localmente
         setVotantes(
           votantes.map((v) =>
             v.id === editingVotante.id
-              ? { ...v, ...formData }
+              ? { 
+                  ...v, 
+                  nombre1: dataToSend.nombre1,
+                  apellido1: dataToSend.apellido1,
+                  cedula: dataToSend.cedula,
+                  telefono: dataToSend.telefono,
+                  direccion: dataToSend.direccion,
+                  barrio: dataToSend.barrio,
+                  puestoVotacion: dataToSend.puestoVotacion,
+                }
               : v
           )
         )
@@ -252,27 +438,45 @@ export default function RegistroVotosPage() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify({
+            nombre1: dataToSend.nombre1,
+            nombre2: dataToSend.nombre2 ?? null,
+            apellido1: dataToSend.apellido1,
+            apellido2: dataToSend.apellido2 ?? null,
+            cedula: dataToSend.cedula,
+            telefono: dataToSend.telefono,
+            direccion: dataToSend.direccion,
+            barrio: dataToSend.barrio,
+            puestoVotacion: dataToSend.puestoVotacion,
+            recommendedById: dataToSend.recommendedById ?? null,
+            programaId: dataToSend.programaId ?? null,
+            sedeId: dataToSend.sedeId ?? null,
+            tipoId: dataToSend.tipoId ?? null,
+            esPago: dataToSend.esPago,
+          }),
         })
 
         if (!response.ok) {
-          throw new Error('Error al registrar el votante')
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.message || 'Error al registrar el votante')
         }
 
         const nuevoVotante = await response.json()
 
-        // Agregar el nuevo votante a la tabla
+        // Agregar el nuevo votante a la tabla con valores seguros
         const votanteFormateado: Votante = {
-          id: nuevoVotante.id,
-          nombre1: nuevoVotante.nombre1,
-          apellido1: nuevoVotante.apellido1,
-          cedula: nuevoVotante.cedula,
-          telefono: nuevoVotante.telefono,
-          direccion: nuevoVotante.direccion,
-          barrio: nuevoVotante.barrio,
-          puestoVotacion: nuevoVotante.puestoVotacion,
+          id: nuevoVotante.id || '',
+          nombre1: nuevoVotante.nombre1 || 'Sin nombre',
+          nombre2: nuevoVotante.nombre2 || undefined,
+          apellido1: nuevoVotante.apellido1 || 'Sin apellido',
+          apellido2: nuevoVotante.apellido2 || undefined,
+          cedula: nuevoVotante.cedula || 'N/A',
+          telefono: nuevoVotante.telefono || 'N/A',
+          direccion: nuevoVotante.direccion || 'N/A',
+          barrio: nuevoVotante.barrio || 'N/A',
+          puestoVotacion: nuevoVotante.puestoVotacion || 'N/A',
           estado: "registrado",
-          fechaRegistro: new Date(nuevoVotante.createdAt).toLocaleDateString("es-CO"),
+          fechaRegistro: nuevoVotante.createdAt ? new Date(nuevoVotante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
         }
 
         setVotantes([votanteFormateado, ...votantes])
@@ -284,6 +488,7 @@ export default function RegistroVotosPage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al registrar'
       toast.error(errorMessage)
+      console.error('Error en handleSubmit:', err)
     } finally {
       setLoading(false)
     }
@@ -293,12 +498,19 @@ export default function RegistroVotosPage() {
     setEditingVotante(votante)
     setFormData({
       nombre1: votante.nombre1,
+      nombre2: votante.nombre2 || "",
       apellido1: votante.apellido1,
+      apellido2: votante.apellido2 || "",
       cedula: votante.cedula,
       telefono: votante.telefono,
       direccion: votante.direccion,
       barrio: votante.barrio,
       puestoVotacion: votante.puestoVotacion,
+      recommendedById: "",
+      programaId: "",
+      sedeId: "",
+      tipoVinculacionId: "",
+      esPago: false,
     })
     setIsDialogOpen(true)
   }
@@ -310,22 +522,43 @@ export default function RegistroVotosPage() {
   const resetForm = () => {
     setFormData({
       nombre1: "",
+      nombre2: "",
       apellido1: "",
+      apellido2: "",
       cedula: "",
       telefono: "",
       direccion: "",
       barrio: "",
       puestoVotacion: "",
+      recommendedById: "",
+      programaId: "",
+      sedeId: "",
+      tipoVinculacionId: "",
+      esPago: formData.esPago,
     })
     setEditingVotante(null)
     setSearchPuesto("")
+    setSearchRecomendado("")
+    setSearchPrograma("")
   }
 
   const puestosFiltered = puestosVotacion.filter((puesto) =>
     puesto.puesto.toLowerCase().includes(searchPuesto.toLowerCase())
   )
 
+  const recomendadosFiltered = recomendados.filter((rec) =>
+    rec.name.toLowerCase().includes(searchRecomendado.toLowerCase())
+  )
+
+  const programasOpsFiltered = programasOpciones.filter((prog) =>
+    prog.label.toLowerCase().includes(searchPrograma.toLowerCase())
+  )
+
   const puestoSeleccionado = puestosVotacion.find((p) => p.id === formData.puestoVotacion)
+  
+  const recomendadoSeleccionado = recomendados.find((r) => r.id === formData.recommendedById)
+  
+  const programaSeleccionado = programasOpciones.find((p) => p.programaId === formData.programaId && p.tipoVinculacionId === formData.tipoVinculacionId)
 
   const getStatusBadge = (estado: Votante["estado"]) => {
     const styles = {
@@ -384,173 +617,375 @@ export default function RegistroVotosPage() {
                       Nuevo Registro
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="md:max-w-2xl " onClick={() => setShowPuestosDropdown(false)}>
-                    <VisuallyHidden>
-                      <DialogTitle id="modal-titulo-votante">
-                        {editingVotante ? "Editar Votante" : "Registrar Nuevo Votante"}
-                      </DialogTitle>
-                    </VisuallyHidden>
 
-
-                    <DialogHeader className="flex flex-row items-center justify-between pr-8">
-                      <h2 className="text-lg font-semibold text-foreground">
-                        {editingVotante ? "Editar Votante" : "Registrar Nuevo Votante"}
-                      </h2>
-                      {!editingVotante && (
-                        <HelpButton tours={[{ name: "Guía del Modal", steps: registrarVotanteModalTour }]} />
-                      )}
-                    </DialogHeader>
-                    <form onSubmit={handleSubmit} className="space-y-4 mt-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="form-nombres">Nombres</Label>
-                          <Input
-                            id="form-nombres"
-                            value={formData.nombre1}
-                            onChange={(e) => setFormData({ ...formData, nombre1: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="form-apellidos">Apellidos</Label>
-                          <Input
-                            id="form-apellidos"
-                            value={formData.apellido1}
-                            onChange={(e) => setFormData({ ...formData, apellido1: e.target.value })}
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="form-cedula">Cédula</Label>
-                          <Input
-                            id="form-cedula"
-                            value={formData.cedula}
-                            onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="form-telefono">Teléfono</Label>
-                          <Input
-                            id="form-telefono"
-                            value={formData.telefono}
-                            onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="form-direccion">Dirección</Label>
-                        <Input
-                          id="form-direccion"
-                          value={formData.direccion}
-                          onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="form-barrio">Barrio</Label>
-                          <Input
-                            id="form-barrio"
-                            value={formData.barrio}
-                            onChange={(e) => setFormData({ ...formData, barrio: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div id="form-puesto" className="space-y-2">
-                          <Label htmlFor="puestoVotacion">Puesto de Votación</Label>
-                          <div className="relative">
-                            <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
-                              <Search className="w-4 h-4 text-muted-foreground" />
-                              <input
-                                id="puestoVotacion"
-                                type="text"
-                                placeholder="Buscar puesto..."
-                                value={searchPuesto}
-                                onChange={(e) => setSearchPuesto(e.target.value)}
-                                onClick={() => setShowPuestosDropdown(true)}
-                                onFocus={() => setShowPuestosDropdown(true)}
-                                className="flex-1 bg-transparent outline-none text-sm"
-                              />
-                              {searchPuesto && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSearchPuesto("")
-                                    setShowPuestosDropdown(true)
-                                  }}
-                                  className="text-muted-foreground hover:text-foreground transition-colors"
-                                  title="Limpiar búsqueda"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
+                  {/* Modal personalizado */}
+                  {isDialogOpen && (
+                    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={() => setIsDialogOpen(false)}>
+                      <div className="bg-background border border-border rounded-lg max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="flex flex-col gap-3 border-b border-border p-6 pb-4 sticky top-0 bg-background">
+                          <div className="flex flex-row items-center justify-between">
+                            <h2 className="text-lg font-semibold text-foreground">
+                              {editingVotante ? "Editar Votante" : "Registrar Nuevo Votante"}
+                            </h2>
+                            <div className="flex gap-2 items-center">
+                              {!editingVotante && (
+                                <HelpButton tours={[{ name: "Guía del Modal", steps: registrarVotanteModalTour }]} />
                               )}
+                              <button
+                                onClick={() => setIsDialogOpen(false)}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                title="Cerrar"
+                              >
+                                <X className="w-5 h-5" />
+                              </button>
                             </div>
+                          </div>
+                          {userName && (
+                            <div className="flex items-center gap-2 pt-2" id="form-registrando-para">
+                              <Avatar className="w-8 h-8">
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                                  {(userName || '').split(' ').map(n => (n || '').charAt(0)).join('').substring(0, 2)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="text-xs text-muted-foreground font-medium">Registrando para <span className="font-bold">Lider</span>:</p>
+                                <p className="text-sm font-medium text-foreground">{userName || 'sin leader asociado'}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
 
-                            {showPuestosDropdown && (
-                              <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
-                                <div className="p-2 border-b border-border text-xs text-muted-foreground">
-                                  {puestosFiltered.length} {puestosFiltered.length === 1 ? "puesto encontrado" : "puestos encontrados"}
-                                </div>
-                                {puestosFiltered.length > 0 ? (
-                                  puestosFiltered.map((puesto) => (
+                        {/* Formulario */}
+                        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="form-nombres">Nombres</Label>
+                              <Input
+                                id="form-nombres"
+                                value={formData.nombre1}
+                                onChange={(e) => setFormData({ ...formData, nombre1: e.target.value })}
+                                placeholder="Ej: Jean Carlos"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="form-apellidos">Apellidos</Label>
+                              <Input
+                                id="form-apellidos"
+                                value={formData.apellido1}
+                                onChange={(e) => setFormData({ ...formData, apellido1: e.target.value })}
+                                placeholder="Ej: Correa Barros"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="form-cedula">Cédula</Label>
+                              <Input
+                                id="form-cedula"
+                                value={formData.cedula}
+                                onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="form-telefono">Teléfono</Label>
+                              <Input
+                                id="form-telefono"
+                                value={formData.telefono}
+                                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="form-direccion">Dirección</Label>
+                            <Input
+                              id="form-direccion"
+                              value={formData.direccion}
+                              onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                              required
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="form-barrio">Barrio</Label>
+                              <Input
+                                id="form-barrio"
+                                value={formData.barrio}
+                                onChange={(e) => setFormData({ ...formData, barrio: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div id="form-puesto" className="space-y-2">
+                              <Label htmlFor="puestoVotacion">Puesto de Votación</Label>
+                              <div className="relative">
+                                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                                  <Search className="w-4 h-4 text-muted-foreground" />
+                                  <input
+                                    id="puestoVotacion"
+                                    type="text"
+                                    placeholder="Buscar puesto..."
+                                    value={searchPuesto}
+                                    onChange={(e) => setSearchPuesto(e.target.value)}
+                                    onClick={() => setShowPuestosDropdown(true)}
+                                    onFocus={() => setShowPuestosDropdown(true)}
+                                    className="flex-1 bg-transparent outline-none text-sm"
+                                  />
+                                  {searchPuesto && (
                                     <button
-                                      key={puesto.id}
                                       type="button"
                                       onClick={() => {
-                                        setFormData({ ...formData, puestoVotacion: puesto.id })
                                         setSearchPuesto("")
-                                        setShowPuestosDropdown(false)
+                                        setShowPuestosDropdown(true)
                                       }}
-                                      className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${formData.puestoVotacion === puesto.id ? "bg-accent text-accent-foreground font-medium" : ""
-                                        }`}
+                                      className="text-muted-foreground hover:text-foreground transition-colors"
+                                      title="Limpiar búsqueda"
                                     >
-                                      {puesto.puesto}
+                                      <X className="w-4 h-4" />
                                     </button>
-                                  ))
-                                ) : (
-                                  <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                                    No se encontraron puestos
+                                  )}
+                                </div>
+
+                                {showPuestosDropdown && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                                    <div className="p-2 border-b border-border text-xs text-muted-foreground">
+                                      {puestosFiltered.length} {puestosFiltered.length === 1 ? "puesto encontrado" : "puestos encontrados"}
+                                    </div>
+                                    {puestosFiltered.length > 0 ? (
+                                      puestosFiltered.map((puesto) => (
+                                        <button
+                                          key={puesto.id}
+                                          type="button"
+                                          onClick={() => {
+                                            setFormData({ ...formData, puestoVotacion: puesto.id })
+                                            setSearchPuesto("")
+                                            setShowPuestosDropdown(false)
+                                          }}
+                                          className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${formData.puestoVotacion === puesto.id ? "bg-accent text-accent-foreground font-medium" : ""
+                                            }`}
+                                        >
+                                          {puesto.puesto}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                        No se encontraron puestos
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {formData.puestoVotacion && (
+                                  <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
+                                    <div>
+                                      <p className="text-xs text-muted-foreground font-medium">Puesto seleccionado:</p>
+                                      <p className="text-sm text-foreground font-medium">{puestoSeleccionado?.puesto}</p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setFormData({ ...formData, puestoVotacion: "" })
+                                        setSearchPuesto("")
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground ml-2"
+                                      title="Cambiar selección"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
                                   </div>
                                 )}
                               </div>
-                            )}
-
-                            {formData.puestoVotacion && (
-                              <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
-                                <div>
-                                  <p className="text-xs text-muted-foreground font-medium">Puesto seleccionado:</p>
-                                  <p className="text-sm text-foreground font-medium">{puestoSeleccionado?.puesto}</p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setFormData({ ...formData, puestoVotacion: "" })
-                                    setSearchPuesto("")
-                                  }}
-                                  className="text-muted-foreground hover:text-foreground ml-2"
-                                  title="Cambiar selección"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
+                            </div>
                           </div>
-                        </div>
+
+                          {/* Leader */}
+                          <div className="space-y-2" id="form-leader">
+                            <Label htmlFor="leaderId">Líder</Label>
+                            <div className="relative">
+                              <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                                <Search className="w-4 h-4 text-muted-foreground" />
+                                <input
+                                  id="leaderId"
+                                  type="text"
+                                  placeholder="Buscar líder..."
+                                  value={searchRecomendado}
+                                  onChange={(e) => setSearchRecomendado(e.target.value)}
+                                  onClick={() => setShowRecomendadosDropdown(true)}
+                                  onFocus={() => setShowRecomendadosDropdown(true)}
+                                  onBlur={() => setTimeout(() => setShowRecomendadosDropdown(false), 200)}
+                                  className="flex-1 bg-transparent outline-none text-sm"
+                                />
+                                {searchRecomendado && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSearchRecomendado("")
+                                      setShowRecomendadosDropdown(true)
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                    title="Limpiar búsqueda"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+
+                              {showRecomendadosDropdown && (
+                                <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                                  <div className="p-2 border-b border-border text-xs text-muted-foreground">
+                                    {recomendadosFiltered.length} {recomendadosFiltered.length === 1 ? "recomendado encontrado" : "recomendados encontrados"}
+                                  </div>
+                                  {recomendadosFiltered.length > 0 ? (
+                                    recomendadosFiltered.map((rec) => (
+                                      <button
+                                        key={rec.id}
+                                        type="button"
+                                        onMouseDown={() => {
+                                          setFormData({ ...formData, recommendedById: rec.id })
+                                          setSearchRecomendado(rec.name)
+                                          setShowRecomendadosDropdown(false)
+                                        }}
+                                        className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${formData.recommendedById === rec.id ? "bg-accent text-accent-foreground font-medium" : ""
+                                          }`}
+                                      >
+                                        {rec.name}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                      No se encontraron recomendados
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {formData.recommendedById && (
+                                <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
+                                  <div>
+                                    <p className="text-xs text-muted-foreground font-medium">Líder seleccionado:</p>
+                                    <p className="text-sm text-foreground font-medium">{recomendadoSeleccionado?.name}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFormData({ ...formData, recommendedById: "" })
+                                      setSearchRecomendado("")
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground ml-2"
+                                    title="Cambiar selección"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Programa */}
+                          <div className="space-y-2" id="form-programa">
+                            <Label htmlFor="programa">Programa</Label>
+                            <div className="relative">
+                              <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                                <Search className="w-4 h-4 text-muted-foreground" />
+                                <input
+                                  id="programa"
+                                  type="text"
+                                  placeholder="Buscar programa..."
+                                  value={searchPrograma}
+                                  onChange={(e) => setSearchPrograma(e.target.value)}
+                                  onClick={() => setShowProgramasDropdown(true)}
+                                  onFocus={() => setShowProgramasDropdown(true)}
+                                  onBlur={() => setTimeout(() => setShowProgramasDropdown(false), 200)}
+                                  className="flex-1 bg-transparent outline-none text-sm"
+                                />
+                                {searchPrograma && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSearchPrograma("")
+                                      setShowProgramasDropdown(true)
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                    title="Limpiar búsqueda"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+
+                              {showProgramasDropdown && (
+                                <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                                  <div className="p-2 border-b border-border text-xs text-muted-foreground">
+                                    {programasOpsFiltered.length} {programasOpsFiltered.length === 1 ? "programa encontrado" : "programas encontrados"}
+                                  </div>
+                                  {programasOpsFiltered.length > 0 ? (
+                                    programasOpsFiltered.map((prog) => (
+                                      <button
+                                        key={`${prog.programaId}-${prog.sedeId}-${prog.tipoVinculacionId}`}
+                                        type="button"
+                                        onMouseDown={() => {
+                                          setFormData({ 
+                                            ...formData, 
+                                            programaId: prog.programaId,
+                                            sedeId: prog.sedeId || "",
+                                            tipoVinculacionId: prog.tipoVinculacionId,
+                                            esPago: prog.esPago
+                                          })
+                                          setSearchPrograma(prog.label)
+                                          setShowProgramasDropdown(false)
+                                        }}
+                                        className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${formData.programaId === prog.programaId && formData.tipoVinculacionId === prog.tipoVinculacionId ? "bg-accent text-accent-foreground font-medium" : ""
+                                          }`}
+                                      >
+                                        {prog.label}
+                                      </button>
+                                    ))
+                                  ) : (
+                                    <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                      No se encontraron programas
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {formData.programaId && (
+                                <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
+                                  <div>
+                                    <p className="text-xs text-muted-foreground font-medium">Programa seleccionado:</p>
+                                    <p className="text-sm text-foreground font-medium">{programaSeleccionado?.label}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFormData({ ...formData, programaId: "", sedeId: "", tipoVinculacionId: "" })
+                                      setSearchPrograma("")
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground ml-2"
+                                    title="Cambiar selección"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Botones */}
+                          <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
+                            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                              Cancelar
+                            </Button>
+                            <Button id="form-submit" type="submit" className="bg-primary text-primary-foreground" disabled={loading}>
+                              {loading ? "Registrando..." : editingVotante ? "Actualizar" : "Registrar"}
+                            </Button>
+                          </div>
+                        </form>
                       </div>
-                      <div className="flex justify-end gap-3 pt-4">
-                        <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                          Cancelar
-                        </Button>
-                        <Button id="form-submit" type="submit" className="bg-primary text-primary-foreground" disabled={loading}>
-                          {loading ? "Registrando..." : editingVotante ? "Actualizar" : "Registrar"}
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
+                    </div>
+                  )}
                 </Dialog>
               </div>
             </div>
@@ -616,12 +1051,12 @@ export default function RegistroVotosPage() {
                           <div className="flex items-center gap-3">
                             <Avatar className="w-8 h-8">
                               <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                {votante.nombre1.charAt(0)}{votante.apellido1.charAt(0)}
+                                {(votante.nombre1 || '').charAt(0)}{(votante.apellido1 || '').charAt(0)}
                               </AvatarFallback>
                             </Avatar>
                             <div id="tabla-nombre">
-                              <p className="text-foreground font-medium text-xs">{votante.nombre1}</p>
-                              <p className="text-muted-foreground text-xs">{votante.apellido1}</p>
+                              <p className="text-foreground font-medium text-xs">{votante.nombre1 || 'Sin nombre'}</p>
+                              <p className="text-muted-foreground text-xs">{votante.apellido1 || 'Sin apellido'}</p>
                             </div>
                           </div>
                         </TableCell>

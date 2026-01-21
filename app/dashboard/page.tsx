@@ -1,10 +1,12 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ClipboardList, Users, MapPin, TrendingUp } from "lucide-react"
 import { sidebarTour } from "@/lib/tours-config"
+import { getRoleFromToken } from "@/lib/auth"
 import {
   VotosDiaChart,
   VotosPuestoChart,
@@ -67,9 +69,17 @@ const itemVariants = {
 }
 
 export default function DashboardPage() {
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const isAdmin = userRole === "ADMIN" || userRole === "SUPERADMIN"
+
+  useEffect(() => {
+    const role = getRoleFromToken()
+    setUserRole(role)
+  }, [])
+
   return (
     <div className="min-h-screen bg-muted/40">
-      <Header title="Dashboard" tours={[{ name: "Guía del Sidebar", steps: sidebarTour }]} />
+      <Header title="Dashboard" /*tours={[{ name: "Guía del Sidebar", steps: sidebarTour }]}*/ />
 
       <div className="p-6 space-y-10">
 
@@ -144,7 +154,7 @@ export default function DashboardPage() {
           {/* Resumen por Zona */}
           <Card>
             <CardHeader>
-              <CardTitle>Resumen por Zona</CardTitle>
+              <CardTitle>Resumen por Puestos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
               {[
@@ -175,27 +185,29 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* ================= GRÁFICOS ================= */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="space-y-6"
-        >
-          <h3 className="text-xl font-semibold">Gráficos y Estadísticas</h3>
+        {isAdmin && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="space-y-6"
+          >
+            <h3 className="text-xl font-semibold">Gráficos y Estadísticas</h3>
 
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <VotosPorLideresChart />
-            <EstadoVotantesChart />
-            <VotosPuestoChart />
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <VotosPorLideresChart />
+              <EstadoVotantesChart />
+              <VotosPuestoChart />
+            </div>
 
-          <div className="grid  grid-cols-1 lg:grid-cols-2 gap-6">
-            <VotosDiaChart />
-            <VotantesVsVotosChart />
-          </div>
+            <div className="grid  grid-cols-1 lg:grid-cols-2 gap-6">
+              <VotosDiaChart />
+              <VotantesVsVotosChart />
+            </div>
 
-        </motion.div>
+          </motion.div>
+        )}
       </div>
     </div>
   )

@@ -19,7 +19,7 @@ export const sidebarTour: TourStep[] = [
       description:
         "Accede a la página de inicio con un resumen general de los votos, estadísticas y actividades recientes.",
       side: "right",
-      align: "center",
+      align: "start",
     },
   },
   {
@@ -336,7 +336,7 @@ export const puestosTour: TourStep[] = [
 
 // Tour para Modal de Registrar Votante (automático)
 export const registrarVotanteModalTour: TourStep[] = [
-  {
+ /* {
     element: "#modal-titulo-votante",
     popover: {
       title: "Registrar Nuevo Votante",
@@ -344,6 +344,16 @@ export const registrarVotanteModalTour: TourStep[] = [
         "Completa este formulario para registrar un nuevo votante en el sistema.",
       side: "bottom",
       align: "center",
+    },
+  },*/
+  {
+    element: "#form-registrando-para",
+    popover: {
+      title: "Lider que Registra",
+      description:
+        "Nombre del lider que esta registrando los votantes.",
+      side: "right",
+      align: "start",
     },
   },
   {
@@ -412,6 +422,26 @@ export const registrarVotanteModalTour: TourStep[] = [
       title: "Puesto de Votación",
       description:
         "Selecciona el puesto de votación asignado. Campo obligatorio.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-recomendado",
+    popover: {
+      title: "Recomendado",
+      description:
+        "Selecciona el líder o persona recomendada para este votante. Este campo es opcional y facilita la asignación de responsables.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
+    element: "#form-programa",
+    popover: {
+      title: "Programa",
+      description:
+        "Selecciona el programa asociado a este votante. Este campo es opcional.",
       side: "right",
       align: "start",
     },
