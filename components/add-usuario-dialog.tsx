@@ -326,7 +326,7 @@ export function AddUsuarioDialog({
           </div>
 
           {/* Leader */}
-          <div className="space-y-2">
+          <div className="space-y-2 hidden">
             <Label htmlFor="leaderId" className="font-medium">
               Líder (Opcional)
             </Label>

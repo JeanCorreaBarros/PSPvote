@@ -78,11 +78,14 @@ export default function UsuariosPage() {
 
   // Estado para Asignar Líderes
   const [openDialogAsign, setOpenDialogAsign] = useState(false)
+  const [lideresConUsuarios, setLideresConUsuarios] = useState<any[]>([])
+  const [isLoadingAsign, setIsLoadingAsign] = useState(true)
 
   // Cargar usuarios al montar el componente
   useEffect(() => {
     loadUsuarios()
     loadLideres()
+    loadLideresConUsuarios()
   }, [])
 
   const loadUsuarios = async () => {
@@ -115,6 +118,38 @@ export default function UsuariosPage() {
     }
   }
 
+  const loadLideresConUsuarios = async () => {
+    try {
+      setIsLoadingAsign(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leaders`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al cargar los líderes')
+      }
+
+      const data = await response.json()
+      setLideresConUsuarios(data)
+    } catch (error: any) {
+      toast.error("Error al cargar líderes: " + error.message, {
+        duration: 4000,
+        position: 'top-right',
+      })
+    } finally {
+      setIsLoadingAsign(false)
+    }
+  }
+
   const filteredUsuarios = usuarios.filter(
     (usuario) =>
       usuario.username.toLowerCase().includes(searchTermUsuarios.toLowerCase())
@@ -138,6 +173,7 @@ export default function UsuariosPage() {
   const handleAssignLider = () => {
     setOpenDialogAsign(false)
     loadUsuarios()
+    loadLideresConUsuarios()
   }
 
   const handleDeleteUsuario = async (id: string) => {
@@ -226,7 +262,7 @@ export default function UsuariosPage() {
           <TabsList>
             <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
             <TabsTrigger value="lideres">Líderes</TabsTrigger>
-            <TabsTrigger value="asignar">Asignar Líderes</TabsTrigger>
+            <TabsTrigger className="hidden" value="asignar">Asignar Líderes</TabsTrigger>
           </TabsList>
 
           {/* TAB: USUARIOS */}
@@ -429,7 +465,7 @@ export default function UsuariosPage() {
               <CardHeader>
                 <CardTitle>Asignar Líderes a Usuarios</CardTitle>
                 <CardDescription>
-                  Selecciona un usuario y asígnale un líder de referencia
+                  Visualiza los líderes y los usuarios asignados a cada uno
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -440,6 +476,71 @@ export default function UsuariosPage() {
                   <Plus className="w-4 h-4" />
                   Asignar Líder
                 </Button>
+              </CardContent>
+            </Card>
+
+            {/* Tabla de Líderes con Usuarios Asignados */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Líderes y Usuarios Asignados</CardTitle>
+                <CardDescription>Total: {lideresConUsuarios.length} líder(es)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingAsign ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    <span className="ml-2 text-muted-foreground">Cargando líderes...</span>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-border">
+                          <TableHead className="font-semibold">Nombre</TableHead>
+                          <TableHead className="font-semibold">Teléfono</TableHead>
+                          <TableHead className="font-semibold">Dirección</TableHead>
+                          <TableHead className="font-semibold">Usuarios Asignados</TableHead>
+                          <TableHead className="font-semibold text-center">Cantidad</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {lideresConUsuarios.length > 0 ? (
+                          lideresConUsuarios.map((lider) => (
+                            <TableRow key={lider.id} className="border-border hover:bg-muted/50">
+                              <TableCell className="font-medium">{lider.name}</TableCell>
+                              <TableCell>{lider.phone}</TableCell>
+                              <TableCell>{lider.address}</TableCell>
+                              <TableCell>
+                                {lider.users && lider.users.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {lider.users.map((user: any) => (
+                                      <Badge key={user.id} variant="secondary" className="block w-fit">
+                                        {user.username}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground text-sm">Sin usuarios asignados</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge variant={lider.users?.length > 0 ? "default" : "outline"}>
+                                  {lider.users?.length || 0}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                              No hay líderes registrados
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
