@@ -137,9 +137,58 @@ export default function RegistroVotosPage() {
   const [loadingProgramas, setLoadingProgramas] = useState(true)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Hook para el tour automático del modal
   useRegistrarVotanteTour(isDialogOpen && !editingVotante)
+
+  // Función para cargar votos desde la API
+  const refetchVotos = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      if (!response.ok) {
+        throw new Error('Error al cargar los votos')
+      }
+      const data = await response.json()
+
+      if (Array.isArray(data)) {
+        const votantesFormateados = data.map((votante: any) => ({
+          id: votante.id || '',
+          nombre1: votante.nombre1 || 'Sin nombre',
+          nombre2: votante.nombre2 || undefined,
+          apellido1: votante.apellido1 || 'Sin apellido',
+          apellido2: votante.apellido2 || undefined,
+          cedula: votante.cedula || 'N/A',
+          telefono: votante.telefono || 'N/A',
+          direccion: votante.direccion || 'N/A',
+          barrio: votante.barrio || 'N/A',
+          puestoVotacion: votante.puestoVotacion || 'N/A',
+          estado: "registrado" as const,
+          fechaRegistro: votante.createdAt ? new Date(votante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
+        }))
+        setVotantes(votantesFormateados)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar votos')
+      toast.error('Error al cargar los votos desde el servidor')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     // Obtener el rol del token
@@ -286,55 +335,9 @@ export default function RegistroVotosPage() {
     fetchProgramasOpciones()
   }, [])
 
-  // Cargar votos desde la API
+  // Cargar votos desde la API al montar el componente
   useEffect(() => {
-    const fetchVotos = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        const token = localStorage.getItem('pspvote_token')
-
-        if (!token) {
-          throw new Error('No hay token de autenticación')
-        }
-
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-        })
-        if (!response.ok) {
-          throw new Error('Error al cargar los votos')
-        }
-        const data = await response.json()
-
-        if (Array.isArray(data)) {
-          const votantesFormateados = data.map((votante: any) => ({
-            id: votante.id || '',
-            nombre1: votante.nombre1 || 'Sin nombre',
-            nombre2: votante.nombre2 || undefined,
-            apellido1: votante.apellido1 || 'Sin apellido',
-            apellido2: votante.apellido2 || undefined,
-            cedula: votante.cedula || 'N/A',
-            telefono: votante.telefono || 'N/A',
-            direccion: votante.direccion || 'N/A',
-            barrio: votante.barrio || 'N/A',
-            puestoVotacion: votante.puestoVotacion || 'N/A',
-            estado: "registrado" as const,
-            fechaRegistro: votante.createdAt ? new Date(votante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
-          }))
-          setVotantes(votantesFormateados)
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al cargar votos')
-        toast.error('Error al cargar los votos desde el servidor')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchVotos()
+    refetchVotos()
   }, [])
 
   // Función para normalizar texto (remover tildes y convertir a minúsculas)
@@ -371,6 +374,17 @@ export default function RegistroVotosPage() {
     return matchesSearch && matchesTab
   })
 
+  // Lógica de paginación
+  const totalPages = Math.ceil(filteredVotantes.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedVotantes = filteredVotantes.slice(startIndex, endIndex)
+
+  // Resetear a página 1 cuando cambia el filtro
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, activeTab])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -406,23 +420,44 @@ export default function RegistroVotosPage() {
       }
 
       if (editingVotante) {
-        // Para edición, solo actualizar localmente
-        setVotantes(
-          votantes.map((v) =>
-            v.id === editingVotante.id
-              ? { 
-                  ...v, 
-                  nombre1: dataToSend.nombre1,
-                  apellido1: dataToSend.apellido1,
-                  cedula: dataToSend.cedula,
-                  telefono: dataToSend.telefono,
-                  direccion: dataToSend.direccion,
-                  barrio: dataToSend.barrio,
-                  puestoVotacion: dataToSend.puestoVotacion,
-                }
-              : v
-          )
-        )
+        // Para edición, enviar los cambios al API
+        const token = localStorage.getItem('pspvote_token')
+
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/${editingVotante.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            nombre1: dataToSend.nombre1,
+            nombre2: dataToSend.nombre2 ?? null,
+            apellido1: dataToSend.apellido1,
+            apellido2: dataToSend.apellido2 ?? null,
+            cedula: dataToSend.cedula,
+            telefono: dataToSend.telefono,
+            direccion: dataToSend.direccion,
+            barrio: dataToSend.barrio,
+            puestoVotacion: dataToSend.puestoVotacion,
+            recommendedById: dataToSend.recommendedById ?? null,
+            programaId: dataToSend.programaId ?? null,
+            sedeId: dataToSend.sedeId ?? null,
+            tipoId: dataToSend.tipoId ?? null,
+            esPago: dataToSend.esPago,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.message || 'Error al actualizar el votante')
+        }
+
+        // Recargar la lista de votantes desde la API
+        await refetchVotos()
         toast.success('Votante actualizado correctamente')
       } else {
         // Para registro nuevo, consumir el endpoint
@@ -463,23 +498,8 @@ export default function RegistroVotosPage() {
 
         const nuevoVotante = await response.json()
 
-        // Agregar el nuevo votante a la tabla con valores seguros
-        const votanteFormateado: Votante = {
-          id: nuevoVotante.id || '',
-          nombre1: nuevoVotante.nombre1 || 'Sin nombre',
-          nombre2: nuevoVotante.nombre2 || undefined,
-          apellido1: nuevoVotante.apellido1 || 'Sin apellido',
-          apellido2: nuevoVotante.apellido2 || undefined,
-          cedula: nuevoVotante.cedula || 'N/A',
-          telefono: nuevoVotante.telefono || 'N/A',
-          direccion: nuevoVotante.direccion || 'N/A',
-          barrio: nuevoVotante.barrio || 'N/A',
-          puestoVotacion: nuevoVotante.puestoVotacion || 'N/A',
-          estado: "registrado",
-          fechaRegistro: nuevoVotante.createdAt ? new Date(nuevoVotante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
-        }
-
-        setVotantes([votanteFormateado, ...votantes])
+        // Recargar la lista de votantes desde la API
+        await refetchVotos()
         toast.success('¡Votante registrado con éxito!')
       }
 
@@ -494,25 +514,73 @@ export default function RegistroVotosPage() {
     }
   }
 
-  const handleEdit = (votante: Votante) => {
-    setEditingVotante(votante)
-    setFormData({
-      nombre1: votante.nombre1,
-      nombre2: votante.nombre2 || "",
-      apellido1: votante.apellido1,
-      apellido2: votante.apellido2 || "",
-      cedula: votante.cedula,
-      telefono: votante.telefono,
-      direccion: votante.direccion,
-      barrio: votante.barrio,
-      puestoVotacion: votante.puestoVotacion,
-      recommendedById: "",
-      programaId: "",
-      sedeId: "",
-      tipoVinculacionId: "",
-      esPago: false,
-    })
-    setIsDialogOpen(true)
+  const handleEdit = async (votante: Votante) => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      // Obtener los datos completos del votante desde el API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/${votante.id}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al cargar los datos del votante')
+      }
+
+      const votanteData = await response.json()
+
+      setEditingVotante(votante)
+      setFormData({
+        nombre1: votanteData.nombre2 ? `${votanteData.nombre1} ${votanteData.nombre2}` : (votanteData.nombre1 || ""),
+        nombre2: "",
+        apellido1: votanteData.apellido2 ? `${votanteData.apellido1} ${votanteData.apellido2}` : (votanteData.apellido1 || ""),
+        apellido2: "",
+        cedula: votanteData.cedula || "",
+        telefono: votanteData.telefono || "",
+        direccion: votanteData.direccion || "",
+        barrio: votanteData.barrio || "",
+        puestoVotacion: votanteData.puestoVotacion || "",
+        recommendedById: votanteData.recommendedById || "",
+        programaId: votanteData.programaId || "",
+        sedeId: votanteData.sedeId || "",
+        tipoVinculacionId: votanteData.tipoId || "",
+        esPago: votanteData.esPago || false,
+      })
+
+      // Cargar los nombres de los campos seleccionados
+      const puestoSelec = puestosVotacion.find(p => p.id === votanteData.puestoVotacion)
+      if (puestoSelec) {
+        setSearchPuesto(puestoSelec.puesto)
+      }
+
+      const recomendadoSelec = recomendados.find(r => r.id === votanteData.recommendedById)
+      if (recomendadoSelec) {
+        setSearchRecomendado(recomendadoSelec.name)
+      }
+
+      const programaSelec = programasOpciones.find(
+        p => p.programaId === votanteData.programaId && p.tipoVinculacionId === votanteData.tipoId
+      )
+      if (programaSelec) {
+        setSearchPrograma(programaSelec.label)
+      }
+
+      setIsDialogOpen(true)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar los datos'
+      toast.error(errorMessage)
+      console.error('Error en handleEdit:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleDelete = (id: string) => {
@@ -1034,9 +1102,9 @@ export default function RegistroVotosPage() {
                 </TableHeader>
                 <TableBody id="registro-tabla">
                   <AnimatePresence mode="popLayout">
-                    {filteredVotantes.map((votante, index) => (
+                    {paginatedVotantes.map((votante, index) => (
                       <motion.tr
-                        key={votante.id}
+                        key={votante.id || `votante-${index}`}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
@@ -1101,6 +1169,48 @@ export default function RegistroVotosPage() {
             {filteredVotantes.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">No se encontraron votantes</p>
+              </div>
+            )}
+
+            {/* Paginación */}
+            {filteredVotantes.length > 0 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/30">
+                <div className="text-sm text-muted-foreground">
+                  Mostrando {startIndex + 1} a {Math.min(endIndex, filteredVotantes.length)} de {filteredVotantes.length} registros
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Anterior
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-2 py-1 rounded text-sm transition-colors ${
+                          currentPage === page
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-muted-foreground hover:bg-muted-foreground/10'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
