@@ -23,8 +23,11 @@ interface Reporte {
 const reportes: Reporte[] = [
   { id: 1, nombre: "Resumen General de Votación", descripcion: "Estadísticas generales de participación electoral", icon: PieChart, tipo: "PDF" },
   { id: 2, nombre: "Registro por Puestos", descripcion: "Detalle de votantes por cada puesto de votación", icon: BarChart3, tipo: "Excel" },
-  { id: 3, nombre: "Análisis de Participación", descripcion: "Tendencias y análisis de participación por zona", icon: TrendingUp, tipo: "PDF" },
-  { id: 4, nombre: "Listado de Votantes", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+
+  { id: 3, nombre: "Gráficos por Lider", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+  { id: 4, nombre: "Gráficos por Zona", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+  { id: 5, nombre: "Gráficos por Puesto", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+  { id: 6, nombre: "Gráficos por Programa", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
 ]
 
 interface Estadisticas {
@@ -99,21 +102,21 @@ export default function ReportesPage() {
               size="sm"
               onClick={async () => {
                 setLoading(true)
-              try {
-                await new Promise((resolve) => setTimeout(resolve, 1000))
-                setEstadisticas(defaultEstadisticas)
-                console.log("Estadísticas actualizadas")
-              } catch (err) {
-                setError("Error al actualizar estadísticas")
-              } finally {
-                setLoading(false)
-              }
-            }}
-            disabled={loading}
-            className="gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Actualizando..." : "Actualizar"}
+                try {
+                  await new Promise((resolve) => setTimeout(resolve, 1000))
+                  setEstadisticas(defaultEstadisticas)
+                  console.log("Estadísticas actualizadas")
+                } catch (err) {
+                  setError("Error al actualizar estadísticas")
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              disabled={loading}
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Actualizando..." : "Actualizar"}
             </Button>
           </div>
         </div>
@@ -127,7 +130,7 @@ export default function ReportesPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"
+          className=" hidden grid-cols-1 md:grid-cols-2 gap-4 mb-6"
           id="estadisticas-cards"
         >
           {[
@@ -193,7 +196,7 @@ export default function ReportesPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="mt-8"
+          className="mt-8 hidden"
         >
           <Card className="border-border">
             <CardHeader>

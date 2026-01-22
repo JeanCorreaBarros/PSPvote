@@ -91,6 +91,7 @@ interface ProgramaOpcion {
 
 interface Votante {
   id: string
+  idnumber: string
   nombre1: string
   nombre2?: string
   apellido1: string
@@ -104,6 +105,7 @@ interface Votante {
   fechaRegistro: string
   recomendado?: string
   programa?: string
+  creadoPor?: string
 }
 
 // Los datos se cargan desde el API
@@ -132,6 +134,7 @@ export default function RegistroVotosPage() {
   const [showPuestosDropdown, setShowPuestosDropdown] = useState(false)
   const [showRecomendadosDropdown, setShowRecomendadosDropdown] = useState(false)
   const [showProgramasDropdown, setShowProgramasDropdown] = useState(false)
+  const [showConfirmClose, setShowConfirmClose] = useState(false)
   const [loadingPuestos, setLoadingPuestos] = useState(true)
   const [loadingRecomendados, setLoadingRecomendados] = useState(true)
   const [loadingProgramas, setLoadingProgramas] = useState(true)
@@ -167,6 +170,7 @@ export default function RegistroVotosPage() {
 
       if (Array.isArray(data)) {
         const votantesFormateados = data.map((votante: any) => ({
+          idnumber: votante.idnumber || 'N/A',
           id: votante.id || '',
           nombre1: votante.nombre1 || 'Sin nombre',
           nombre2: votante.nombre2 || undefined,
@@ -179,6 +183,7 @@ export default function RegistroVotosPage() {
           puestoVotacion: votante.puestoVotacion || 'N/A',
           estado: "registrado" as const,
           fechaRegistro: votante.createdAt ? new Date(votante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
+          creadoPor: votante.leader?.name || 'N/A',
         }))
         setVotantes(votantesFormateados)
       }
@@ -194,7 +199,7 @@ export default function RegistroVotosPage() {
     // Obtener el rol del token
     const role = getRoleFromToken()
     setUserRole(role)
-    
+
     // Obtener el nombre del usuario del sessionStorage
     const userDataStr = sessionStorage.getItem('pspvote_user')
     if (userDataStr) {
@@ -207,7 +212,7 @@ export default function RegistroVotosPage() {
     }
   }, [])
 
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     nombre1: "",
     nombre2: "",
     apellido1: "",
@@ -222,7 +227,9 @@ export default function RegistroVotosPage() {
     sedeId: "",
     tipoVinculacionId: "",
     esPago: Boolean(false),
-  })
+  }
+
+  const [formData, setFormData] = useState(initialFormData)
 
   // Cargar puestos de votación desde la API
   useEffect(() => {
@@ -387,7 +394,7 @@ export default function RegistroVotosPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validación básica
     if (!formData.nombre1 || !formData.apellido1 || !formData.cedula || !formData.puestoVotacion) {
       toast.error('Por favor completa los campos requeridos')
@@ -445,7 +452,7 @@ export default function RegistroVotosPage() {
             puestoVotacion: dataToSend.puestoVotacion,
             recommendedById: dataToSend.recommendedById ?? null,
             programaId: dataToSend.programaId ?? null,
-            sedeId: dataToSend.sedeId ?? null,
+            sedeId: dataToSend.sedeId,
             tipoId: dataToSend.tipoId ?? null,
             esPago: dataToSend.esPago,
           }),
@@ -453,6 +460,9 @@ export default function RegistroVotosPage() {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
+          if (response.status === 401 || errorData.error === 'No autorizado') {
+            throw new Error('El usuario no está autorizado para esta función')
+          }
           throw new Error(errorData.message || 'Error al actualizar el votante')
         }
 
@@ -485,7 +495,7 @@ export default function RegistroVotosPage() {
             puestoVotacion: dataToSend.puestoVotacion,
             recommendedById: dataToSend.recommendedById ?? null,
             programaId: dataToSend.programaId ?? null,
-            sedeId: dataToSend.sedeId ?? null,
+            sedeId: dataToSend.sedeId,
             tipoId: dataToSend.tipoId ?? null,
             esPago: dataToSend.esPago,
           }),
@@ -493,6 +503,9 @@ export default function RegistroVotosPage() {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}))
+          if (response.status === 401 || errorData.error === 'No autorizado') {
+            throw new Error('El usuario no está autorizado para esta función')
+          }
           throw new Error(errorData.message || 'Error al registrar el votante')
         }
 
@@ -532,6 +545,13 @@ export default function RegistroVotosPage() {
       })
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('El usuario no está autorizado para esta función')
+        }
+        const errorData = await response.json().catch(() => ({}))
+        if (errorData.error === 'No autorizado') {
+          throw new Error('El usuario no está autorizado para esta función')
+        }
         throw new Error('Error al cargar los datos del votante')
       }
 
@@ -587,23 +607,45 @@ export default function RegistroVotosPage() {
     setVotantes(votantes.filter((v) => v.id !== id))
   }
 
+  // Función para detectar si hay cambios sin guardar
+  const hasUnsavedChanges = () => {
+    if (editingVotante) return false // Si está editando, no mostrar confirmación
+
+    return (
+      formData.nombre1 !== "" ||
+      formData.apellido1 !== "" ||
+      formData.cedula !== "" ||
+      formData.telefono !== "" ||
+      formData.direccion !== "" ||
+      formData.barrio !== "" ||
+      formData.puestoVotacion !== "" ||
+      formData.recommendedById !== "" ||
+      formData.programaId !== "" ||
+      formData.sedeId !== "" ||
+      formData.tipoVinculacionId !== "" ||
+      formData.esPago !== false // 👈 AÑADIR
+    )
+  }
+
+  // Función para manejar el cierre del modal
+  const handleCloseDialog = (open: boolean) => {
+    if (!open && hasUnsavedChanges()) {
+      setShowConfirmClose(true)
+    } else {
+      setIsDialogOpen(open)
+      if (!open) resetForm()
+    }
+  }
+
+  // Función para confirmar el cierre sin guardar
+  const handleConfirmClose = () => {
+    setShowConfirmClose(false)
+    setIsDialogOpen(false)
+    resetForm()
+  }
+
   const resetForm = () => {
-    setFormData({
-      nombre1: "",
-      nombre2: "",
-      apellido1: "",
-      apellido2: "",
-      cedula: "",
-      telefono: "",
-      direccion: "",
-      barrio: "",
-      puestoVotacion: "",
-      recommendedById: "",
-      programaId: "",
-      sedeId: "",
-      tipoVinculacionId: "",
-      esPago: formData.esPago,
-    })
+    setFormData(initialFormData)
     setEditingVotante(null)
     setSearchPuesto("")
     setSearchRecomendado("")
@@ -623,9 +665,9 @@ export default function RegistroVotosPage() {
   )
 
   const puestoSeleccionado = puestosVotacion.find((p) => p.id === formData.puestoVotacion)
-  
+
   const recomendadoSeleccionado = recomendados.find((r) => r.id === formData.recommendedById)
-  
+
   const programaSeleccionado = programasOpciones.find((p) => p.programaId === formData.programaId && p.tipoVinculacionId === formData.tipoVinculacionId)
 
   const getStatusBadge = (estado: Votante["estado"]) => {
@@ -675,10 +717,7 @@ export default function RegistroVotosPage() {
                   Filtros
                 </Button>
 
-                <Dialog open={isDialogOpen} onOpenChange={(open) => {
-                  setIsDialogOpen(open)
-                  if (!open) resetForm()
-                }}>
+                <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
                   <DialogTrigger asChild>
                     <Button id="registro-nuevo-btn" size="sm" className="gap-2 w-full md:w-auto bg-primary text-primary-foreground">
                       <Plus className="w-4 h-4" />
@@ -688,20 +727,30 @@ export default function RegistroVotosPage() {
 
                   {/* Modal personalizado */}
                   {isDialogOpen && (
-                    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={() => setIsDialogOpen(false)}>
+                    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
                       <div className="bg-background border border-border rounded-lg max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         {/* Header */}
                         <div className="flex flex-col gap-3 border-b border-border p-6 pb-4 sticky top-0 bg-background">
+
+                          {/* HEADER — NO SE TOCA */}
                           <div className="flex flex-row items-center justify-between">
                             <h2 className="text-lg font-semibold text-foreground">
                               {editingVotante ? "Editar Votante" : "Registrar Nuevo Votante"}
                             </h2>
+
                             <div className="flex gap-2 items-center">
                               {!editingVotante && (
                                 <HelpButton tours={[{ name: "Guía del Modal", steps: registrarVotanteModalTour }]} />
                               )}
                               <button
-                                onClick={() => setIsDialogOpen(false)}
+                                onClick={() => {
+                                  if (editingVotante || !hasUnsavedChanges()) {
+                                    resetForm()
+                                    setIsDialogOpen(false)
+                                  } else {
+                                    setShowConfirmClose(true)
+                                  }
+                                }}
                                 className="text-muted-foreground hover:text-foreground transition-colors"
                                 title="Cerrar"
                               >
@@ -709,20 +758,98 @@ export default function RegistroVotosPage() {
                               </button>
                             </div>
                           </div>
-                          {userName && (
-                            <div className="flex items-center gap-2 pt-2" id="form-registrando-para">
-                              <Avatar className="w-8 h-8">
-                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
-                                  {(userName || '').split(' ').map(n => (n || '').charAt(0)).join('').substring(0, 2)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="text-xs text-muted-foreground font-medium">Registrando para <span className="font-bold">Lider</span>:</p>
-                                <p className="text-sm font-medium text-foreground">{userName || 'sin leader asociado'}</p>
+
+                          {/* FILA: IZQUIERDA (RJ) | DERECHA (LEADER) */}
+                          <div className="flex flex-col md:flex-row gap-4 items-start">
+
+                            {/* IZQUIERDA */}
+                            {userName && (
+                              <div
+                                className="flex items-center gap-2 md:w-1/2"
+                                id="form-registrando-para"
+                              >
+                                <Avatar className="w-8 h-8">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                                    {(userName || "")
+                                      .split(" ")
+                                      .map(n => n.charAt(0))
+                                      .join("")
+                                      .substring(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium">
+                                    Registrando para <span className="font-bold">Líder</span>:
+                                  </p>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {userName || "sin líder asociado"}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* DERECHA */}
+                            <div className="space-y-2 md:w-1/2" id="form-leader">
+                              <Label htmlFor="leaderId">Recomendado por</Label>
+
+                              <div className="relative">
+                                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                                  <Search className="w-4 h-4 text-muted-foreground" />
+                                  <input
+                                    id="leaderId"
+                                    type="text"
+                                    placeholder="Buscar Recomendado..."
+                                    value={searchRecomendado}
+                                    onChange={(e) => setSearchRecomendado(e.target.value)}
+                                    onFocus={() => setShowRecomendadosDropdown(true)}
+                                    onBlur={() => setTimeout(() => setShowRecomendadosDropdown(false), 200)}
+                                    className="flex-1 bg-transparent outline-none text-sm"
+                                  />
+                                  {searchRecomendado && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSearchRecomendado("")
+                                        setShowRecomendadosDropdown(true)
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {showRecomendadosDropdown && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                                    {recomendadosFiltered.length > 0 ? (
+                                      recomendadosFiltered.map((rec) => (
+                                        <button
+                                          key={rec.id}
+                                          type="button"
+                                          onMouseDown={() => {
+                                            setFormData({ ...formData, recommendedById: rec.id })
+                                            setSearchRecomendado(rec.name)
+                                            setShowRecomendadosDropdown(false)
+                                          }}
+                                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                                        >
+                                          {rec.name}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                        No se encontraron recomendados
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          )}
+
+                          </div>
                         </div>
+
 
                         {/* Formulario */}
                         <form onSubmit={handleSubmit} className="space-y-4 p-6">
@@ -733,7 +860,7 @@ export default function RegistroVotosPage() {
                                 id="form-nombres"
                                 value={formData.nombre1}
                                 onChange={(e) => setFormData({ ...formData, nombre1: e.target.value })}
-                                placeholder="Ej: Jean Carlos"
+                                placeholder="Ej: Juan Manuel"
                                 required
                               />
                             </div>
@@ -743,7 +870,7 @@ export default function RegistroVotosPage() {
                                 id="form-apellidos"
                                 value={formData.apellido1}
                                 onChange={(e) => setFormData({ ...formData, apellido1: e.target.value })}
-                                placeholder="Ej: Correa Barros"
+                                placeholder="Ej: Martinez Lopez"
                                 required
                               />
                             </div>
@@ -789,50 +916,63 @@ export default function RegistroVotosPage() {
                             </div>
                             <div id="form-puesto" className="space-y-2">
                               <Label htmlFor="puestoVotacion">Puesto de Votación</Label>
+
                               <div className="relative">
                                 <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
                                   <Search className="w-4 h-4 text-muted-foreground" />
+
                                   <input
                                     id="puestoVotacion"
                                     type="text"
                                     placeholder="Buscar puesto..."
                                     value={searchPuesto}
-                                    onChange={(e) => setSearchPuesto(e.target.value)}
-                                    onClick={() => setShowPuestosDropdown(true)}
+                                    onChange={(e) => {
+                                      setSearchPuesto(e.target.value)
+                                      setFormData({ ...formData, puestoVotacion: "" })
+                                      setShowPuestosDropdown(true)
+                                    }}
                                     onFocus={() => setShowPuestosDropdown(true)}
                                     className="flex-1 bg-transparent outline-none text-sm"
                                   />
+
                                   {searchPuesto && (
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setSearchPuesto("")
+                                        setFormData({ ...formData, puestoVotacion: "" })
                                         setShowPuestosDropdown(true)
                                       }}
                                       className="text-muted-foreground hover:text-foreground transition-colors"
-                                      title="Limpiar búsqueda"
+                                      title="Limpiar"
                                     >
                                       <X className="w-4 h-4" />
                                     </button>
                                   )}
                                 </div>
 
+                                {/* DROPDOWN */}
                                 {showPuestosDropdown && (
                                   <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
                                     <div className="p-2 border-b border-border text-xs text-muted-foreground">
-                                      {puestosFiltered.length} {puestosFiltered.length === 1 ? "puesto encontrado" : "puestos encontrados"}
+                                      {puestosFiltered.length}{" "}
+                                      {puestosFiltered.length === 1 ? "puesto encontrado" : "puestos encontrados"}
                                     </div>
+
                                     {puestosFiltered.length > 0 ? (
                                       puestosFiltered.map((puesto) => (
                                         <button
                                           key={puesto.id}
                                           type="button"
-                                          onClick={() => {
+                                          onMouseDown={() => {
                                             setFormData({ ...formData, puestoVotacion: puesto.id })
-                                            setSearchPuesto("")
+                                            setSearchPuesto(puesto.puesto)
                                             setShowPuestosDropdown(false)
                                           }}
-                                          className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${formData.puestoVotacion === puesto.id ? "bg-accent text-accent-foreground font-medium" : ""
+                                          className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0
+                                            ${formData.puestoVotacion === puesto.id
+                                              ? "bg-accent text-accent-foreground font-medium"
+                                              : ""
                                             }`}
                                         >
                                           {puesto.puesto}
@@ -845,32 +985,13 @@ export default function RegistroVotosPage() {
                                     )}
                                   </div>
                                 )}
-
-                                {formData.puestoVotacion && (
-                                  <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
-                                    <div>
-                                      <p className="text-xs text-muted-foreground font-medium">Puesto seleccionado:</p>
-                                      <p className="text-sm text-foreground font-medium">{puestoSeleccionado?.puesto}</p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setFormData({ ...formData, puestoVotacion: "" })
-                                        setSearchPuesto("")
-                                      }}
-                                      className="text-muted-foreground hover:text-foreground ml-2"
-                                      title="Cambiar selección"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                )}
                               </div>
                             </div>
+
                           </div>
 
                           {/* Leader */}
-                          <div className="space-y-2" id="form-leader">
+                          {/*<div className="space-y-2" id="form-leader">
                             <Label htmlFor="leaderId">Líder</Label>
                             <div className="relative">
                               <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
@@ -950,62 +1071,89 @@ export default function RegistroVotosPage() {
                                 </div>
                               )}
                             </div>
-                          </div>
+                          </div>*/}
 
                           {/* Programa */}
                           <div className="space-y-2" id="form-programa">
                             <Label htmlFor="programa">Programa</Label>
+
                             <div className="relative">
                               <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
                                 <Search className="w-4 h-4 text-muted-foreground" />
+
                                 <input
                                   id="programa"
                                   type="text"
                                   placeholder="Buscar programa..."
                                   value={searchPrograma}
-                                  onChange={(e) => setSearchPrograma(e.target.value)}
-                                  onClick={() => setShowProgramasDropdown(true)}
+                                  onChange={(e) => {
+                                    setSearchPrograma(e.target.value)
+                                    setFormData({
+                                      ...formData,
+                                      programaId: "",
+                                      sedeId: "",
+                                      tipoVinculacionId: "",
+                                      esPago: false,
+                                    })
+                                    setShowProgramasDropdown(true)
+                                  }}
                                   onFocus={() => setShowProgramasDropdown(true)}
-                                  onBlur={() => setTimeout(() => setShowProgramasDropdown(false), 200)}
                                   className="flex-1 bg-transparent outline-none text-sm"
                                 />
+
                                 {searchPrograma && (
                                   <button
                                     type="button"
                                     onClick={() => {
                                       setSearchPrograma("")
+                                      setFormData({
+                                        ...formData,
+                                        programaId: "",
+                                        sedeId: "",
+                                        tipoVinculacionId: "",
+                                        esPago: false,
+                                      })
                                       setShowProgramasDropdown(true)
                                     }}
                                     className="text-muted-foreground hover:text-foreground transition-colors"
-                                    title="Limpiar búsqueda"
+                                    title="Limpiar"
                                   >
                                     <X className="w-4 h-4" />
                                   </button>
                                 )}
                               </div>
 
+                              {/* DROPDOWN */}
                               {showProgramasDropdown && (
                                 <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
                                   <div className="p-2 border-b border-border text-xs text-muted-foreground">
-                                    {programasOpsFiltered.length} {programasOpsFiltered.length === 1 ? "programa encontrado" : "programas encontrados"}
+                                    {programasOpsFiltered.length}{" "}
+                                    {programasOpsFiltered.length === 1
+                                      ? "programa encontrado"
+                                      : "programas encontrados"}
                                   </div>
+
                                   {programasOpsFiltered.length > 0 ? (
                                     programasOpsFiltered.map((prog) => (
                                       <button
                                         key={`${prog.programaId}-${prog.sedeId}-${prog.tipoVinculacionId}`}
                                         type="button"
                                         onMouseDown={() => {
-                                          setFormData({ 
-                                            ...formData, 
+                                          setFormData({
+                                            ...formData,
                                             programaId: prog.programaId,
                                             sedeId: prog.sedeId || "",
                                             tipoVinculacionId: prog.tipoVinculacionId,
-                                            esPago: prog.esPago
+                                            esPago: prog.esPago,
                                           })
                                           setSearchPrograma(prog.label)
                                           setShowProgramasDropdown(false)
                                         }}
-                                        className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${formData.programaId === prog.programaId && formData.tipoVinculacionId === prog.tipoVinculacionId ? "bg-accent text-accent-foreground font-medium" : ""
+                                        className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0
+                ${formData.programaId === prog.programaId &&
+                                            formData.tipoVinculacionId === prog.tipoVinculacionId
+                                            ? "bg-accent text-accent-foreground font-medium"
+                                            : ""
                                           }`}
                                       >
                                         {prog.label}
@@ -1018,32 +1166,20 @@ export default function RegistroVotosPage() {
                                   )}
                                 </div>
                               )}
-
-                              {formData.programaId && (
-                                <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
-                                  <div>
-                                    <p className="text-xs text-muted-foreground font-medium">Programa seleccionado:</p>
-                                    <p className="text-sm text-foreground font-medium">{programaSeleccionado?.label}</p>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setFormData({ ...formData, programaId: "", sedeId: "", tipoVinculacionId: "" })
-                                      setSearchPrograma("")
-                                    }}
-                                    className="text-muted-foreground hover:text-foreground ml-2"
-                                    title="Cambiar selección"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
                             </div>
                           </div>
-                          
+
+
                           {/* Botones */}
                           <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
-                            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                            <Button type="button" variant="outline" onClick={() => {
+                              if (editingVotante || !hasUnsavedChanges()) {
+                                resetForm()
+                                setIsDialogOpen(false)
+                              } else {
+                                setShowConfirmClose(true)
+                              }
+                            }}>
                               Cancelar
                             </Button>
                             <Button id="form-submit" type="submit" className="bg-primary text-primary-foreground" disabled={loading}>
@@ -1065,8 +1201,8 @@ export default function RegistroVotosPage() {
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === tab
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground"
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
                   {tab}
@@ -1089,12 +1225,16 @@ export default function RegistroVotosPage() {
                   <TableRow id="registro-tabla-header" className="border-border hover:bg-transparent">
                     <TableHead className="w-12"></TableHead>
                     <TableHead className="text-muted-foreground font-medium max-w-32 truncate">ID</TableHead>
+                    {userRole === "ADMIN" && (
+                      <TableHead className="text-muted-foreground font-medium">Creado Por</TableHead>
+                    )}
                     <TableHead className="text-muted-foreground font-medium">Votante</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Cédula</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Teléfono</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Dirección</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Barrio</TableHead>
                     <TableHead className="text-muted-foreground font-medium">P. Votación</TableHead>
+
                     <TableHead className="text-muted-foreground font-medium">Estado</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Fecha</TableHead>
                     <TableHead className="text-muted-foreground font-medium w-12">Acción</TableHead>
@@ -1114,7 +1254,10 @@ export default function RegistroVotosPage() {
                         <TableCell>
                           <input type="checkbox" className="rounded border-border ml-5" />
                         </TableCell>
-                        <TableCell className="text-foreground font-medium max-w-32 truncate" title={votante.id}>{votante.id}</TableCell>
+                        <TableCell className="text-foreground font-medium max-w-32 truncate" title={votante.id}>{votante.idnumber}</TableCell>
+                         {userRole === "ADMIN" && (
+                          <TableCell className="text-foreground font-medium max-w-32 truncate text-sm" title={votante.creadoPor}>{votante.creadoPor}</TableCell>
+                        )}
                         <TableCell id="tabla-avatar">
                           <div className="flex items-center gap-3">
                             <Avatar className="w-8 h-8">
@@ -1192,11 +1335,10 @@ export default function RegistroVotosPage() {
                       <button
                         key={page}
                         onClick={() => setCurrentPage(page)}
-                        className={`px-2 py-1 rounded text-sm transition-colors ${
-                          currentPage === page
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:bg-muted-foreground/10'
-                        }`}
+                        className={`px-2 py-1 rounded text-sm transition-colors ${currentPage === page
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-muted-foreground/10'
+                          }`}
                       >
                         {page}
                       </button>
@@ -1216,6 +1358,34 @@ export default function RegistroVotosPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de confirmación para datos sin guardar */}
+      {showConfirmClose && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg max-w-sm w-full p-6 shadow-lg">
+            <h2 className="text-lg font-semibold text-foreground mb-2">¿Descartar cambios?</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Tiene datos sin guardar. Si cierra el modal, los datos se perderán.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowConfirmClose(false)}
+              >
+                Continuar editando
+              </Button>
+              <Button
+                type="button"
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleConfirmClose}
+              >
+                Descartar cambios
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

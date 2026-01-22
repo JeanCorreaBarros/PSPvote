@@ -68,7 +68,7 @@ export function VotosDiaChart() {
   return (
     <Card className="border-border">
       <CardHeader>
-        <CardTitle>Votos por día</CardTitle>
+        <CardTitle>Gráficos por Programa</CardTitle>
       </CardHeader>
       <CardContent>
         <Line data={data} options={chartOptions} height={300} />
@@ -107,7 +107,7 @@ export function VotosPuestoChart() {
   return (
     <Card className="border-border">
       <CardHeader>
-        <CardTitle>Votos por puesto</CardTitle>
+        <CardTitle>Gráficos por Puesto</CardTitle>
       </CardHeader>
       <CardContent>
         <Bar data={data} options={chartOptions} height={300} />
@@ -212,7 +212,7 @@ export function EstadoVotantesChart() {
   return (
     <Card className="border-border">
       <CardHeader>
-        <CardTitle>Estado de votantes</CardTitle>
+        <CardTitle>Gráficos por Zona</CardTitle>
       </CardHeader>
       <CardContent>
         <Doughnut data={data} options={chartOptions} height={300} />
@@ -277,11 +277,11 @@ export function VotantesVsVotosChart() {
   }
 
   return (
-    <Card className="border-border">
+    <Card className="border-border  ">
       <CardHeader>
-        <CardTitle>Votantes vs Votos</CardTitle>
+        <CardTitle>Gráficos por Programa</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent >
         <Line data={data} options={options} height={300} />
       </CardContent>
     </Card>
@@ -324,7 +324,7 @@ export function VotosPorLideresChart() {
   return (
     <Card className="border-border">
       <CardHeader>
-        <CardTitle>Votos por Líderes</CardTitle>
+        <CardTitle>Gráficos por Lider</CardTitle>
       </CardHeader>
       <CardContent>
         <Bar data={data} options={chartOptions} height={300} />
