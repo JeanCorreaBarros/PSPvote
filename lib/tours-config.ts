@@ -297,7 +297,7 @@ export const registrarVotanteModalTour: TourStep[] = [
     popover: {
       title: "Recomendado",
       description:
-        "Selecciona el recomendado. Puedes escoger uno existente o escribir un nuevo nombre y presionar Enter para crearlo.",
+        "Si al momento de registrar un recomendado su nombre no aparece en la lista desplegable, y luego de verificar que realmente no existe (recuerden que el campo cuenta con autocompletado), deberán presionar la tecla Enter para crear el recomendado como un nuevo registro.",
       side: "right",
       align: "start",
     },
