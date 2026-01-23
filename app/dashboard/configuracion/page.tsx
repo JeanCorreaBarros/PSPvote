@@ -21,9 +21,9 @@ interface Configuracion {
 }
 
 const defaultConfig: Configuracion = {
-  nombreEvento: "Elecciones 2024",
-  fecha: "2024-01-18",
-  lugar: "Centro de Convenciones",
+  nombreEvento: "Elecciones 2026",
+  fecha: "2024-01-21",
+  lugar: "Centro de Convenciones - Soledad",
   horaInicio: "08:00",
   horaFin: "17:00",
 }
@@ -96,11 +96,11 @@ export default function ConfiguracionPage() {
               <User className="w-4 h-4" />
               Evento
             </TabsTrigger>
-            <TabsTrigger value="notificaciones" className="gap-2">
+            <TabsTrigger value="notificaciones" className="gap-2 hidden">
               <Bell className="w-4 h-4" />
               Notificaciones
             </TabsTrigger>
-            <TabsTrigger value="seguridad" className="gap-2">
+            <TabsTrigger value="seguridad" className="gap-2 hidden">
               <Shield className="w-4 h-4" />
               Seguridad
             </TabsTrigger>
@@ -126,7 +126,8 @@ export default function ConfiguracionPage() {
                     <Input
                       id="nombreEvento"
                       value={config.nombreEvento}
-                      onChange={(e) => setConfig({ ...config, nombreEvento: e.target.value })}
+                      disabled
+                      className="bg-muted cursor-not-allowed"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -136,7 +137,8 @@ export default function ConfiguracionPage() {
                         id="fecha"
                         type="date"
                         value={config.fecha}
-                        onChange={(e) => setConfig({ ...config, fecha: e.target.value })}
+                        disabled
+                        className="bg-muted cursor-not-allowed"
                       />
                     </div>
                     <div className="space-y-2">
@@ -144,7 +146,8 @@ export default function ConfiguracionPage() {
                       <Input
                         id="lugar"
                         value={config.lugar}
-                        onChange={(e) => setConfig({ ...config, lugar: e.target.value })}
+                        disabled
+                        className="bg-muted cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -155,7 +158,8 @@ export default function ConfiguracionPage() {
                         id="horaInicio"
                         type="time"
                         value={config.horaInicio}
-                        onChange={(e) => setConfig({ ...config, horaInicio: e.target.value })}
+                        disabled
+                        className="bg-muted cursor-not-allowed"
                       />
                     </div>
                     <div className="space-y-2">
@@ -164,7 +168,8 @@ export default function ConfiguracionPage() {
                         id="horaFin"
                         type="time"
                         value={config.horaFin}
-                        onChange={(e) => setConfig({ ...config, horaFin: e.target.value })}
+                        disabled
+                        className="bg-muted cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -268,11 +273,11 @@ export default function ConfiguracionPage() {
                 <CardContent className="space-y-4">
                   <div className="p-4 bg-muted/50 rounded-lg">
                     <p className="text-sm font-medium text-foreground">Versión del Sistema</p>
-                    <p className="text-sm text-muted-foreground">PSPVote v1.0.0</p>
+                    <p className="text-sm text-muted-foreground">PSPvote v1.0.0</p>
                   </div>
                   <div className="p-4 bg-muted/50 rounded-lg">
                     <p className="text-sm font-medium text-foreground">Última Actualización</p>
-                    <p className="text-sm text-muted-foreground">18 de Enero, 2026</p>
+                    <p className="text-sm text-muted-foreground">23 de Enero, 2026</p>
                   </div>
                   <div className="p-4 bg-muted/50 rounded-lg">
                     <p className="text-sm font-medium text-foreground">Base de Datos</p>
@@ -280,7 +285,7 @@ export default function ConfiguracionPage() {
                   </div>
                   <div className="p-4 bg-muted/50 rounded-lg">
                     <p className="text-sm font-medium text-foreground">URL de API</p>
-                    <p className="text-sm text-muted-foreground">{process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3001/api'}</p>
+                    <p className="text-sm text-muted-foreground">{process.env.NEXT_PUBLIC_API_BASE_URL }</p>
                   </div>
                 </CardContent>
               </Card>

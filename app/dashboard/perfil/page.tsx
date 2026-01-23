@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import { ChangePasswordDialog } from "@/components/change-password-dialog"
 import { getUser, type User as UserType } from "@/lib/auth"
 
 export default function PerfilPage() {
@@ -19,6 +20,7 @@ export default function PerfilPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [openChangePasswordDialog, setOpenChangePasswordDialog] = useState(false)
 
   useEffect(() => {
     const currentUser = getUser()
@@ -65,6 +67,11 @@ export default function PerfilPage() {
   const handleNotificationsToggle = (enabled: boolean) => {
     setNotificationsEnabled(enabled)
     localStorage.setItem("notifications-enabled", enabled.toString())
+  }
+
+  const handleChangePassword = () => {
+    // El componente ChangePasswordDialog se encargará de redirigir después de cambiar
+    setOpenChangePasswordDialog(false)
   }
 
   if (isLoading) {
@@ -237,7 +244,7 @@ export default function PerfilPage() {
 
         {/* Card - Seguridad */}
         <motion.div variants={itemVariants}>
-          <Card className="mb-6 hidden">
+          <Card className="mb-6 ">
             <CardHeader>
               <CardTitle>Seguridad</CardTitle>
               <CardDescription>Gestiona tu acceso y contraseña</CardDescription>
@@ -246,16 +253,20 @@ export default function PerfilPage() {
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <div>
                   <p className="font-medium text-foreground">Contraseña</p>
-                  <p className="text-sm text-muted-foreground">Última actualización hace 3 meses</p>
+                  <p className="text-sm text-muted-foreground">Al cambiar la contraseña debes volver a inciar session </p>
                 </div>
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setOpenChangePasswordDialog(true)}
+                >
                   Cambiar
                 </Button>
               </div>
 
               <Separator />
 
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className=" hidden items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <div>
                   <p className="font-medium text-foreground">Autenticación de Dos Factores</p>
                   <p className="text-sm text-muted-foreground">Deshabilitado</p>
@@ -324,6 +335,18 @@ export default function PerfilPage() {
           </Button>
         </motion.div>
       </motion.main>
+
+      {/* Dialog Cambiar Contraseña */}
+      {user && (
+        <ChangePasswordDialog
+          open={openChangePasswordDialog}
+          onOpenChange={setOpenChangePasswordDialog}
+          onChangePassword={handleChangePassword}
+          userId={user.id}
+          username={user.username}
+          roleId={user.roleId}
+        />
+      )}
     </div>
   )
 }

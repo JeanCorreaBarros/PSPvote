@@ -34,9 +34,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Plus, Search, Edit2, Trash2, MoreVertical, Filter, X } from "lucide-react"
+import { Plus, Search, Edit2, Trash2, MoreVertical, Filter, X, Power, PowerOff } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,6 +116,7 @@ interface Votante {
   programa?: string
   creadoPor?: string
   isDuplicate?: boolean
+  isActive?: boolean
 }
 
 // Los datos se cargan desde el API
@@ -143,6 +153,9 @@ export default function RegistroVotosPage() {
   const [userName, setUserName] = useState<string>("")
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
+  const [toggleStatusId, setToggleStatusId] = useState<string | null>(null)
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false)
+  const [observation, setObservation] = useState("")
 
   // Hook para el tour automático del modal
   useRegistrarVotanteTour(isDialogOpen && !editingVotante)
@@ -186,6 +199,7 @@ export default function RegistroVotosPage() {
           fechaRegistro: votante.createdAt ? new Date(votante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
           creadoPor: votante.leader?.name || 'N/A',
           isDuplicate: votante.isDuplicate || false,
+          isActive: votante.isActive || false,
         }))
         setVotantes(votantesFormateados)
       }
@@ -609,6 +623,75 @@ export default function RegistroVotosPage() {
     setVotantes(votantes.filter((v) => v.id !== id))
   }
 
+  const handleToggleStatus = async (id: string) => {
+    let toastId: string | undefined
+    try {
+      setIsTogglingStatus(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      // Validar si se requiere observation (solo cuando se desactiva)
+      const votante = votantes.find(v => v.id === id)
+      if (votante?.isActive && !observation.trim()) {
+        toast.error("Por favor ingresa un comentario para desactivar el registro", {
+          duration: 4000,
+          position: 'top-right',
+        })
+        setIsTogglingStatus(false)
+        return
+      }
+
+      toastId = toast.loading("Actualizando estado...", {
+        position: 'top-right',
+      })
+
+      const body = votante?.isActive ? { observation } : {}
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/${id}/toggle-status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al actualizar el estado del registro')
+      }
+
+      const data = await response.json()
+
+      // Actualizar el votante en el estado
+      refetchVotos()
+      setToggleStatusId(null)
+      setObservation("")
+
+      const statusMessage = data.isActive ? "Registro activado exitosamente" : "Registro desactivado exitosamente"
+      toast.success(statusMessage, {
+        id: toastId,
+        duration: 4000,
+      })
+    } catch (error: any) {
+      const errorMessage = error.message || "Error desconocido"
+      if (toastId) {
+        toast.error(`Error al actualizar estado: ${errorMessage}`, {
+          id: toastId,
+          duration: 4000,
+        })
+      } else {
+        toast.error(`Error al actualizar estado: ${errorMessage}`, {
+          duration: 4000,
+        })
+      }
+    } finally {
+      setIsTogglingStatus(false)
+    }
+  }
+
   // Función para detectar si hay cambios sin guardar
   const hasUnsavedChanges = () => {
     if (editingVotante) return false // Si está editando, no mostrar confirmación
@@ -792,11 +875,11 @@ export default function RegistroVotosPage() {
                             )}
 
                             {/* DERECHA */}
-                            <div  className="space-y-2 md:w-1/2" id="form-leader">
+                            <div className="space-y-2 md:w-1/2" id="form-leader">
                               <Label htmlFor="leaderId">Recomendado por</Label>
 
-                              <div id="form-recomendado"  className="relative">
-                                <div  className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                              <div id="form-recomendado" className="relative">
+                                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
                                   <Search className="w-4 h-4 text-muted-foreground" />
                                   <input
                                     id="leaderId"
@@ -1371,11 +1454,21 @@ export default function RegistroVotosPage() {
                               </DropdownMenuItem>
                               {userRole === "ADMIN" && (
                                 <DropdownMenuItem
-                                  onClick={() => handleDelete(votante.id)}
-                                  className="text-destructive"
+                                  onClick={() => setToggleStatusId(votante.id)}
+                                  className={votante.isActive ? "text-orange-600" : "text-green-600"}
                                 >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Eliminar
+                                  {votante.isActive ? (
+                                    <>
+                                      <PowerOff className="w-4 h-4 mr-2" />
+                                      Desactivar {votante.isActive}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Power className="w-4 h-4 mr-2" />
+                                      {votante.isActive}
+                                      Activar
+                                    </>
+                                  )}
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuContent>
@@ -1465,6 +1558,57 @@ export default function RegistroVotosPage() {
           </div>
         </div>
       )}
+
+      {/* Dialog Toggle Status */}
+      <AlertDialog open={toggleStatusId !== null}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {votantes.find(v => v.id === toggleStatusId)?.isActive ? "Desactivar Registro" : "Activar Registro"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {votantes.find(v => v.id === toggleStatusId)?.isActive
+                ? "¿Estás seguro de que deseas desactivar este registro de votación?"
+                : "¿Estás seguro de que deseas activar este registro de votación?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {/* Mostrar input de observación solo cuando se desactiva */}
+          {votantes.find(v => v.id === toggleStatusId)?.isActive && (
+            <div className="space-y-2">
+              <label htmlFor="observation" className="text-sm font-medium">
+                Comentario de desactivación *
+              </label>
+              <Input
+                id="observation"
+                placeholder="Ej: Datos incompletos, registro duplicado..."
+                value={observation}
+                onChange={(e) => setObservation(e.target.value)}
+                disabled={isTogglingStatus}
+              />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <AlertDialogCancel
+              onClick={() => {
+                setToggleStatusId(null)
+                setObservation("")
+              }}
+              disabled={isTogglingStatus}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => toggleStatusId && handleToggleStatus(toggleStatusId)}
+              className={votantes.find(v => v.id === toggleStatusId)?.isActive ? "bg-orange-600 hover:bg-orange-700" : "bg-green-600 hover:bg-green-700"}
+              disabled={isTogglingStatus}
+            >
+              {isTogglingStatus ? "Actualizando..." : (votantes.find(v => v.id === toggleStatusId)?.isActive ? "Desactivar" : "Activar")}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

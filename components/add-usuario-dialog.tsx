@@ -197,7 +197,18 @@ export function AddUsuarioDialog({
         duration: 4000,
       })
     } catch (error: any) {
-      const errorMessage = error?.message || "Error al crear el usuario"
+      let errorMessage = error?.message || "Error al crear el usuario"
+      
+      // Obtener el mensaje de error del objeto error
+      const errorBody = error?.message || ""
+      
+      // Validar si es un error de constraint único en el campo username
+      if (errorBody.includes("Unique constraint failed") && errorBody.includes("User_username_key")) {
+        errorMessage = `Usuario ya registrado con ese documento de identidad`
+      } else if (errorBody.includes("400") || errorBody.includes("Bad Request")) {
+        errorMessage = `Usuario ya registrado con ese documento de identidad`
+      }
+      
       if (toastId) {
         toast.error(errorMessage, {
           id: toastId,

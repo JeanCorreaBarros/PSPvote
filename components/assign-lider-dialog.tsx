@@ -65,6 +65,16 @@ export function AssignLiderDialog({ open, onOpenChange, onAssign }: AssignLiderD
     setSelectedLiderId("")
   }
 
+  // Filtrar usuarios sin líder asignado
+  const usuariosSinLider = usuarios.filter(usuario => !usuario.leaderId)
+
+  // Filtrar líderes sin usuarios asignados
+  const lideresSinUsuarios = lideres.filter(lider => {
+    // Contar cuántos usuarios están asignados a este líder
+    const usuariosAsignados = usuarios.filter(u => u.leaderId === lider.id)
+    return usuariosAsignados.length === 0
+  })
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -142,8 +152,8 @@ export function AssignLiderDialog({ open, onOpenChange, onAssign }: AssignLiderD
                   className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 dark:bg-gray-800 dark:text-white dark:border-gray-600"
                   disabled={isLoading}
                 >
-                  <option value="">Seleccionar usuario ({usuarios.length})</option>
-                  {usuarios.map((usuario) => (
+                  <option value="">Seleccionar usuario ({usuariosSinLider.length})</option>
+                  {usuariosSinLider.map((usuario) => (
                     <option key={usuario.id} value={usuario.id}>
                       {usuario.username} ({usuario.role?.name || "Sin rol"})
                     </option>
@@ -160,8 +170,8 @@ export function AssignLiderDialog({ open, onOpenChange, onAssign }: AssignLiderD
                   className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 dark:bg-gray-800 dark:text-white dark:border-gray-600"
                   disabled={isLoading}
                 >
-                  <option value="">Seleccionar líder ({lideres.length})</option>
-                  {lideres.map((lider) => (
+                  <option value="">Seleccionar líder ({lideresSinUsuarios.length})</option>
+                  {lideresSinUsuarios.map((lider) => (
                     <option key={lider.id} value={lider.id}>
                       {lider.name} ({lider.phone})
                     </option>
