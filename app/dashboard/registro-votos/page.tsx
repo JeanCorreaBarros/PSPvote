@@ -106,6 +106,7 @@ interface Votante {
   recomendado?: string
   programa?: string
   creadoPor?: string
+  isDuplicate?: boolean
 }
 
 // Los datos se cargan desde el API
@@ -184,6 +185,7 @@ export default function RegistroVotosPage() {
           estado: "registrado" as const,
           fechaRegistro: votante.createdAt ? new Date(votante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
           creadoPor: votante.leader?.name || 'N/A',
+          isDuplicate: votante.isDuplicate || false,
         }))
         setVotantes(votantesFormateados)
       }
@@ -653,15 +655,15 @@ export default function RegistroVotosPage() {
   }
 
   const puestosFiltered = puestosVotacion.filter((puesto) =>
-    puesto.puesto.toLowerCase().includes(searchPuesto.toLowerCase())
+    (puesto.puesto || '').toLowerCase().includes(searchPuesto.toLowerCase())
   )
 
   const recomendadosFiltered = recomendados.filter((rec) =>
-    rec.name.toLowerCase().includes(searchRecomendado.toLowerCase())
+    (rec.name || '').toLowerCase().includes(searchRecomendado.toLowerCase())
   )
 
   const programasOpsFiltered = programasOpciones.filter((prog) =>
-    prog.label.toLowerCase().includes(searchPrograma.toLowerCase())
+    (prog.label || '').toLowerCase().includes(searchPrograma.toLowerCase())
   )
 
   const puestoSeleccionado = puestosVotacion.find((p) => p.id === formData.puestoVotacion)
@@ -670,15 +672,15 @@ export default function RegistroVotosPage() {
 
   const programaSeleccionado = programasOpciones.find((p) => p.programaId === formData.programaId && p.tipoVinculacionId === formData.tipoVinculacionId)
 
-  const getStatusBadge = (estado: Votante["estado"]) => {
+  const getStatusBadge = (estado: Votante["estado"], isDuplicate?: boolean) => {
     const styles = {
       verificado: "bg-accent/10 text-accent border-accent/20",
-      registrado: "bg-primary/10 text-primary border-primary/20",
+      registrado: isDuplicate ? "bg-red-100 text-red-700 border-red-300" : "bg-primary/10 text-primary border-primary/20",
       pendiente: "bg-chart-3/10 text-chart-3 border-chart-3/20",
     }
     const labels = {
       verificado: "Verificado",
-      registrado: "Registrado",
+      registrado: isDuplicate ? "Registrado/Duplicado" : "Registrado",
       pendiente: "Pendiente",
     }
     return (
@@ -799,11 +801,88 @@ export default function RegistroVotosPage() {
                                   <input
                                     id="leaderId"
                                     type="text"
-                                    placeholder="Buscar Recomendado..."
+                                    placeholder="Buscar Recomendado... (Enter para crear nuevo)"
                                     value={searchRecomendado}
                                     onChange={(e) => setSearchRecomendado(e.target.value)}
                                     onFocus={() => setShowRecomendadosDropdown(true)}
                                     onBlur={() => setTimeout(() => setShowRecomendadosDropdown(false), 200)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter' && searchRecomendado.trim()) {
+                                        console.log('🔍 Enter presionado - Buscando:', searchRecomendado)
+                                        const existe = recomendadosFiltered.some(r => r.name.toLowerCase() === searchRecomendado.toLowerCase())
+                                        
+                                        console.log('📋 ¿Existe en la lista?:', existe)
+                                        
+                                        if (!existe) {
+                                          try {
+                                            console.log('✨ Creando nuevo líder:', searchRecomendado)
+                                            setLoading(true)
+                                            const token = localStorage.getItem('pspvote_token')
+                                            
+                                            if (!token) {
+                                              throw new Error('No hay token de autenticación')
+                                            }
+
+                                            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leaders`, {
+                                              method: 'POST',
+                                              headers: {
+                                                'Content-Type': 'application/json',
+                                                'Authorization': `Bearer ${token}`,
+                                              },
+                                              body: JSON.stringify({
+                                                name: searchRecomendado.trim(),
+                                                phone: "0000000000",
+                                                address: "0000000000"
+                                              }),
+                                            })
+
+                                            if (!response.ok) {
+                                              const errorData = await response.json().catch(() => ({}))
+                                              throw new Error(errorData.message || 'Error al crear el líder')
+                                            }
+
+                                            const nuevoLider = await response.json()
+                                            
+                                            // Extraer el líder del response (estructura anidada)
+                                            const liderData = nuevoLider.leader
+                                            
+                                            console.log('✅ Líder creado exitosamente:', liderData)
+                                            console.log('🆔 ID del nuevo líder:', liderData.id)
+                                            
+                                            if (!liderData || !liderData.id) {
+                                              throw new Error('El servidor no devolvió un ID válido para el nuevo líder')
+                                            }
+                                            
+                                            // Agregar el nuevo líder a la lista
+                                            setRecomendados(prev => [...prev, liderData])
+                                            console.log('📝 Añadido a lista de recomendados')
+                                            
+                                            // Actualizar el formulario con el nuevo líder
+                                            setFormData(prev => {
+                                              const updated = { ...prev, recommendedById: liderData.id }
+                                              console.log('📌 recommendedById asignado a:', liderData.id)
+                                              console.log('📦 FormData actualizado:', updated)
+                                              return updated
+                                            })
+                                            
+                                            // Actualizar el search para mostrar el nombre del nuevo líder
+                                            setSearchRecomendado(liderData.name)
+                                            console.log('🏷️ Campo de búsqueda actualizado a:', liderData.name)
+                                            
+                                            // Cerrar el dropdown
+                                            setShowRecomendadosDropdown(false)
+                                            
+                                            toast.success(`¡Líder "${liderData.name}" creado y asignado exitosamente!`)
+                                          } catch (err) {
+                                            const errorMessage = err instanceof Error ? err.message : 'Error al crear el líder'
+                                            console.error('❌ Error al crear líder:', errorMessage, err)
+                                            toast.error(errorMessage)
+                                          } finally {
+                                            setLoading(false)
+                                          }
+                                        }
+                                      }
+                                    }}
                                     className="flex-1 bg-transparent outline-none text-sm"
                                   />
                                   {searchRecomendado && (
@@ -1249,35 +1328,35 @@ export default function RegistroVotosPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ delay: index * 0.03 }}
-                        className="border-border hover:bg-muted/50"
+                        className={`border-border ${votante.isDuplicate ? 'bg-red-50/50 hover:bg-red-100/50' : 'hover:bg-muted/50'}`}
                       >
                         <TableCell>
                           <input type="checkbox" className="rounded border-border ml-5" />
                         </TableCell>
-                        <TableCell className="text-foreground font-medium max-w-32 truncate" title={votante.id}>{votante.idnumber}</TableCell>
+                        <TableCell className={`font-medium max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`} title={votante.id}>{votante.idnumber}</TableCell>
                          {userRole === "ADMIN" && (
-                          <TableCell className="text-foreground font-medium max-w-32 truncate text-sm" title={votante.creadoPor}>{votante.creadoPor}</TableCell>
+                          <TableCell className={`font-medium max-w-32 truncate text-sm ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`} title={votante.creadoPor}>{votante.creadoPor}</TableCell>
                         )}
                         <TableCell id="tabla-avatar">
                           <div className="flex items-center gap-3">
                             <Avatar className="w-8 h-8">
-                              <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                              <AvatarFallback className={`text-xs ${votante.isDuplicate ? 'bg-red-200 text-red-700' : 'bg-primary/10 text-primary'}`}>
                                 {(votante.nombre1 || '').charAt(0)}{(votante.apellido1 || '').charAt(0)}
                               </AvatarFallback>
                             </Avatar>
                             <div id="tabla-nombre">
-                              <p className="text-foreground font-medium text-xs">{votante.nombre1 || 'Sin nombre'}</p>
-                              <p className="text-muted-foreground text-xs">{votante.apellido1 || 'Sin apellido'}</p>
+                              <p className={`font-medium text-xs ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.nombre1 || 'Sin nombre'}</p>
+                              <p className={`text-xs ${votante.isDuplicate ? 'text-red-600' : 'text-muted-foreground'}`}>{votante.apellido1 || 'Sin apellido'}</p>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-foreground">{votante.cedula}</TableCell>
-                        <TableCell className="text-foreground  max-w-20 truncate">{votante.telefono}</TableCell>
-                        <TableCell className="text-foreground  max-w-20 truncate text-sm">{votante.direccion}</TableCell>
-                        <TableCell className="text-foreground  max-w-32 truncate">{votante.barrio}</TableCell>
-                        <TableCell className="text-foreground  max-w-32 truncate">{votante.puestoVotacion}</TableCell>
-                        <TableCell id="tabla-estado">{getStatusBadge(votante.estado)}</TableCell>
-                        <TableCell className="text-muted-foreground">{votante.fechaRegistro}</TableCell>
+                        <TableCell className={votante.isDuplicate ? 'text-red-700' : 'text-foreground'}>{votante.cedula}</TableCell>
+                        <TableCell className={`max-w-20 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.telefono}</TableCell>
+                        <TableCell className={`max-w-20 truncate text-sm ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.direccion}</TableCell>
+                        <TableCell className={`max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.barrio}</TableCell>
+                        <TableCell className={`max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.puestoVotacion}</TableCell>
+                        <TableCell id="tabla-estado">{getStatusBadge(votante.estado, votante.isDuplicate)}</TableCell>
+                        <TableCell className={votante.isDuplicate ? 'text-red-600' : 'text-muted-foreground'}>{votante.fechaRegistro}</TableCell>
                         <TableCell id="tabla-acciones">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
