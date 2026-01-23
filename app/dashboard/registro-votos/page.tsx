@@ -792,11 +792,11 @@ export default function RegistroVotosPage() {
                             )}
 
                             {/* DERECHA */}
-                            <div className="space-y-2 md:w-1/2" id="form-leader">
+                            <div  className="space-y-2 md:w-1/2" id="form-leader">
                               <Label htmlFor="leaderId">Recomendado por</Label>
 
-                              <div className="relative">
-                                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                              <div id="form-recomendado"  className="relative">
+                                <div  className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
                                   <Search className="w-4 h-4 text-muted-foreground" />
                                   <input
                                     id="leaderId"
@@ -810,15 +810,15 @@ export default function RegistroVotosPage() {
                                       if (e.key === 'Enter' && searchRecomendado.trim()) {
                                         console.log('🔍 Enter presionado - Buscando:', searchRecomendado)
                                         const existe = recomendadosFiltered.some(r => r.name.toLowerCase() === searchRecomendado.toLowerCase())
-                                        
+
                                         console.log('📋 ¿Existe en la lista?:', existe)
-                                        
+
                                         if (!existe) {
                                           try {
                                             console.log('✨ Creando nuevo líder:', searchRecomendado)
                                             setLoading(true)
                                             const token = localStorage.getItem('pspvote_token')
-                                            
+
                                             if (!token) {
                                               throw new Error('No hay token de autenticación')
                                             }
@@ -842,21 +842,21 @@ export default function RegistroVotosPage() {
                                             }
 
                                             const nuevoLider = await response.json()
-                                            
+
                                             // Extraer el líder del response (estructura anidada)
                                             const liderData = nuevoLider.leader
-                                            
+
                                             console.log('✅ Líder creado exitosamente:', liderData)
                                             console.log('🆔 ID del nuevo líder:', liderData.id)
-                                            
+
                                             if (!liderData || !liderData.id) {
                                               throw new Error('El servidor no devolvió un ID válido para el nuevo líder')
                                             }
-                                            
+
                                             // Agregar el nuevo líder a la lista
                                             setRecomendados(prev => [...prev, liderData])
                                             console.log('📝 Añadido a lista de recomendados')
-                                            
+
                                             // Actualizar el formulario con el nuevo líder
                                             setFormData(prev => {
                                               const updated = { ...prev, recommendedById: liderData.id }
@@ -864,14 +864,14 @@ export default function RegistroVotosPage() {
                                               console.log('📦 FormData actualizado:', updated)
                                               return updated
                                             })
-                                            
+
                                             // Actualizar el search para mostrar el nombre del nuevo líder
                                             setSearchRecomendado(liderData.name)
                                             console.log('🏷️ Campo de búsqueda actualizado a:', liderData.name)
-                                            
+
                                             // Cerrar el dropdown
                                             setShowRecomendadosDropdown(false)
-                                            
+
                                             toast.success(`¡Líder "${liderData.name}" creado y asignado exitosamente!`)
                                           } catch (err) {
                                             const errorMessage = err instanceof Error ? err.message : 'Error al crear el líder'
@@ -1334,7 +1334,7 @@ export default function RegistroVotosPage() {
                           <input type="checkbox" className="rounded border-border ml-5" />
                         </TableCell>
                         <TableCell className={`font-medium max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`} title={votante.id}>{votante.idnumber}</TableCell>
-                         {userRole === "ADMIN" && (
+                        {userRole === "ADMIN" && (
                           <TableCell className={`font-medium max-w-32 truncate text-sm ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`} title={votante.creadoPor}>{votante.creadoPor}</TableCell>
                         )}
                         <TableCell id="tabla-avatar">

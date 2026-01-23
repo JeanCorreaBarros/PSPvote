@@ -293,6 +293,16 @@ export const registrarVotanteModalTour: TourStep[] = [
     },
   },
   {
+    element: "#form-recomendado",
+    popover: {
+      title: "Recomendado",
+      description:
+        "Selecciona el recomendado. Puedes escoger uno existente o escribir un nuevo nombre y presionar Enter para crearlo.",
+      side: "right",
+      align: "start",
+    },
+  },
+  {
     element: "#form-nombres",
     popover: {
       title: "Nombres",
@@ -358,16 +368,6 @@ export const registrarVotanteModalTour: TourStep[] = [
       title: "Puesto de Votación",
       description:
         "Selecciona el puesto de votación asignado. Campo obligatorio.",
-      side: "right",
-      align: "start",
-    },
-  },
-  {
-    element: "#form-recomendado",
-    popover: {
-      title: "Recomendado",
-      description:
-        "Selecciona el líder o persona recomendada para este votante. Este campo es opcional y facilita la asignación de responsables.",
       side: "right",
       align: "start",
     },
