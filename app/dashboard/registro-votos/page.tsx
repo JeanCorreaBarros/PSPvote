@@ -142,9 +142,11 @@ export default function RegistroVotosPage() {
   const [searchPuesto, setSearchPuesto] = useState("")
   const [searchRecomendado, setSearchRecomendado] = useState("")
   const [searchPrograma, setSearchPrograma] = useState("")
+  const [searchLider, setSearchLider] = useState("")
   const [showPuestosDropdown, setShowPuestosDropdown] = useState(false)
   const [showRecomendadosDropdown, setShowRecomendadosDropdown] = useState(false)
   const [showProgramasDropdown, setShowProgramasDropdown] = useState(false)
+  const [showLiderDropdown, setShowLiderDropdown] = useState(false)
   const [showConfirmClose, setShowConfirmClose] = useState(false)
   const [loadingPuestos, setLoadingPuestos] = useState(true)
   const [loadingRecomendados, setLoadingRecomendados] = useState(true)
@@ -239,12 +241,27 @@ export default function RegistroVotosPage() {
     barrio: "",
     puestoVotacion: "",
     recommendedById: "",
+    leaderId: "",
     programaId: "",
-    sedeId: "",
+    programaLabel: "",
+    sedeId: null as string | null,
     tipoVinculacionId: "",
     esPago: Boolean(false),
   }
 
+  // Función para generar IDs únicos
+  const generateUniqueId = () => {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  type VotanteRowType = typeof initialFormData & {
+    id: string
+    error?: string
+  }
+
+  const [votanteRows, setVotanteRows] = useState<VotanteRowType[]>([
+    { ...initialFormData, id: generateUniqueId() }
+  ])
   const [formData, setFormData] = useState(initialFormData)
 
   // Cargar puestos de votación desde la API
@@ -408,6 +425,147 @@ export default function RegistroVotosPage() {
     setCurrentPage(1)
   }, [searchTerm, activeTab])
 
+  // Sincronizar leaderId y recommendedById de la cabecera a todas las filas en modo creación
+  useEffect(() => {
+    if (!editingVotante && isDialogOpen && votanteRows.length > 0) {
+      setVotanteRows(prev => prev.map(row => ({
+        ...row,
+        leaderId: formData.leaderId,
+        recommendedById: formData.recommendedById
+      })))
+    }
+  }, [formData.leaderId, formData.recommendedById, editingVotante, isDialogOpen])
+
+  // Sincronizar programaLabel cuando se carguen los programasOpciones en modo edición
+  useEffect(() => {
+    if (editingVotante && formData.programaId && !formData.programaLabel && programasOpciones.length > 0) {
+      const programaEncontrado = programasOpciones.find(
+        p => p.programaId === formData.programaId && 
+             p.tipoVinculacionId === formData.tipoVinculacionId &&
+             (p.sedeId === formData.sedeId || (p.sedeId === null && formData.sedeId === null))
+      )
+      if (programaEncontrado) {
+        setFormData(prev => ({
+          ...prev,
+          programaLabel: programaEncontrado.label
+        }))
+      }
+    }
+  }, [editingVotante, programasOpciones, formData.programaId, formData.tipoVinculacionId, formData.sedeId])
+
+  const addNewRow = () => {
+    const newId = generateUniqueId()
+    // Nueva fila hereda automáticamente leaderId y recommendedById de la cabecera (formData)
+    setVotanteRows([...votanteRows, { 
+      ...initialFormData, 
+      id: newId,
+      leaderId: formData.leaderId,
+      recommendedById: formData.recommendedById
+    }])
+  }
+
+  const updateRow = (id: string, updates: Partial<VotanteRowType>) => {
+    setVotanteRows(votanteRows.map(row =>
+      row.id === id ? { ...row, ...updates, error: undefined } : row
+    ))
+  }
+
+  const deleteRow = (id: string) => {
+    if (votanteRows.length > 1) {
+      setVotanteRows(votanteRows.filter(row => row.id !== id))
+    } else {
+      toast.error('Debe haber al menos una fila en el formulario')
+    }
+  }
+
+  const handleSubmitRows = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      let failedCount = 0
+      const updatedRows: VotanteRowType[] = []
+
+      // Validar todos los registros
+      for (const row of votanteRows) {
+        if (!row.nombre1 || !row.apellido1 || !row.cedula || !row.telefono || !row.direccion || !row.barrio || !row.puestoVotacion || !row.programaId) {
+          updatedRows.push({
+            ...row,
+            error: 'Campos incompletos'
+          })
+          failedCount++
+        }
+      }
+
+      // Si hay errores, mostrar y detener
+      if (failedCount > 0) {
+        setVotanteRows(updatedRows.filter(row => row.error))
+        toast.error(`${failedCount} votante(s) con error (marcados en rojo)`)
+        setLoading(false)
+        return
+      }
+
+      // Preparar array de votantes válidos para enviar al bulk
+      const votantesParaEnviar = votanteRows.map(row => {
+        const nombreSplit = splitNameFields(row.nombre1 || '')
+        const apellidoSplit = splitNameFields(row.apellido1 || '')
+
+        return {
+          nombre1: nombreSplit.first,
+          nombre2: nombreSplit.second || null,
+          apellido1: apellidoSplit.first,
+          apellido2: apellidoSplit.second || null,
+          cedula: row.cedula,
+          telefono: row.telefono,
+          direccion: row.direccion,
+          barrio: row.barrio,
+          puestoVotacion: row.puestoVotacion,
+          recommendedById: row.recommendedById || null,
+          leaderId: row.leaderId || null,
+          programaId: row.programaId || null,
+          sedeId: row.sedeId || null,
+          tipoId: row.tipoVinculacionId || null,
+          esPago: row.esPago,
+        }
+      })
+
+      // Enviar al endpoint bulk
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(votantesParaEnviar),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || 'Error al registrar votantes')
+      }
+
+      const result = await response.json()
+
+      // Limpiar formulario y cerrar modal
+      setVotanteRows([{ ...initialFormData, id: generateUniqueId() }])
+      setIsDialogOpen(false)
+
+      toast.success(`${votantesParaEnviar.length} votante(s) registrado(s) exitosamente`)
+      await refetchVotos()
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al registrar'
+      toast.error(errorMessage)
+      console.error('Error en handleSubmitRows:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -436,8 +594,9 @@ export default function RegistroVotosPage() {
         barrio: formData.barrio || '',
         puestoVotacion: formData.puestoVotacion || '',
         recommendedById: formData.recommendedById || undefined,
+        leaderId: formData.leaderId || undefined,
         programaId: formData.programaId || undefined,
-        sedeId: formData.sedeId || undefined,
+        sedeId: formData.sedeId ?? null,
         tipoId: formData.tipoVinculacionId || undefined,
         esPago: formData.esPago,
       }
@@ -467,6 +626,7 @@ export default function RegistroVotosPage() {
             barrio: dataToSend.barrio,
             puestoVotacion: dataToSend.puestoVotacion,
             recommendedById: dataToSend.recommendedById ?? null,
+            leaderId: dataToSend.leaderId ?? null,
             programaId: dataToSend.programaId ?? null,
             sedeId: dataToSend.sedeId,
             tipoId: dataToSend.tipoId ?? null,
@@ -510,6 +670,7 @@ export default function RegistroVotosPage() {
             barrio: dataToSend.barrio,
             puestoVotacion: dataToSend.puestoVotacion,
             recommendedById: dataToSend.recommendedById ?? null,
+            leaderId: dataToSend.leaderId ?? null,
             programaId: dataToSend.programaId ?? null,
             sedeId: dataToSend.sedeId,
             tipoId: dataToSend.tipoId ?? null,
@@ -574,6 +735,17 @@ export default function RegistroVotosPage() {
       const votanteData = await response.json()
 
       setEditingVotante(votante)
+      // Asegurar que tipoVinculacionId siempre venga del tipoId del backend
+      const tipoVinculacionIdValue = votanteData.tipoId || votanteData.tipoVinculacionId || ""
+      
+      // Buscar el label del programa que corresponde a esta combinación
+      const programaEncontrado = programasOpciones.find(
+        p => p.programaId === votanteData.programaId && 
+             p.tipoVinculacionId === votanteData.tipoId &&
+             (p.sedeId === votanteData.sedeId || (p.sedeId === null && votanteData.sedeId === null))
+      )
+      const programaLabelValue = programaEncontrado ? programaEncontrado.label : ""
+
       setFormData({
         nombre1: votanteData.nombre2 ? `${votanteData.nombre1} ${votanteData.nombre2}` : (votanteData.nombre1 || ""),
         nombre2: "",
@@ -585,9 +757,11 @@ export default function RegistroVotosPage() {
         barrio: votanteData.barrio || "",
         puestoVotacion: votanteData.puestoVotacion || "",
         recommendedById: votanteData.recommendedById || "",
+        leaderId: votanteData.leaderId || "",
         programaId: votanteData.programaId || "",
-        sedeId: votanteData.sedeId || "",
-        tipoVinculacionId: votanteData.tipoId || "",
+        programaLabel: programaLabelValue,
+        sedeId: votanteData.sedeId || null,
+        tipoVinculacionId: tipoVinculacionIdValue,
         esPago: votanteData.esPago || false,
       })
 
@@ -602,12 +776,12 @@ export default function RegistroVotosPage() {
         setSearchRecomendado(recomendadoSelec.name)
       }
 
-      const programaSelec = programasOpciones.find(
-        p => p.programaId === votanteData.programaId && p.tipoVinculacionId === votanteData.tipoId
-      )
-      if (programaSelec) {
-        setSearchPrograma(programaSelec.label)
+      const liderSelec = recomendados.find(r => r.id === votanteData.leaderId)
+      if (liderSelec) {
+        setSearchLider(liderSelec.name)
       }
+
+
 
       setIsDialogOpen(true)
     } catch (err) {
@@ -705,10 +879,11 @@ export default function RegistroVotosPage() {
       formData.barrio !== "" ||
       formData.puestoVotacion !== "" ||
       formData.recommendedById !== "" ||
+      formData.leaderId !== "" ||
       formData.programaId !== "" ||
       formData.sedeId !== "" ||
       formData.tipoVinculacionId !== "" ||
-      formData.esPago !== false // 👈 AÑADIR
+      formData.esPago !== false
     )
   }
 
@@ -731,10 +906,18 @@ export default function RegistroVotosPage() {
 
   const resetForm = () => {
     setFormData(initialFormData)
+    // Primera fila hereda leaderId y recommendedById si ya estaban seleccionados
+    setVotanteRows([{ 
+      ...initialFormData, 
+      id: generateUniqueId(),
+      leaderId: formData.leaderId,
+      recommendedById: formData.recommendedById
+    }])
     setEditingVotante(null)
     setSearchPuesto("")
     setSearchRecomendado("")
     setSearchPrograma("")
+    setSearchLider("")
   }
 
   const puestosFiltered = puestosVotacion.filter((puesto) =>
@@ -813,7 +996,7 @@ export default function RegistroVotosPage() {
                   {/* Modal personalizado */}
                   {isDialogOpen && (
                     <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
-                      <div className="bg-background border border-border rounded-lg max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                      <div className="bg-background border border-border rounded-lg  w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         {/* Header */}
                         <div className="flex flex-col gap-3 border-b border-border p-6 pb-4 sticky top-0 bg-background">
 
@@ -844,13 +1027,13 @@ export default function RegistroVotosPage() {
                             </div>
                           </div>
 
-                          {/* FILA: IZQUIERDA (RJ) | DERECHA (LEADER) */}
-                          <div className="flex flex-col md:flex-row gap-4 items-start">
+                          {/* FILA: IZQUIERDA (RJ) | CENTRO (RECOMENDADO) | DERECHA (LÍDER) */}
+                          <div className="flex flex-col lg:flex-row gap-4 items-start w-full">
 
                             {/* IZQUIERDA */}
                             {userName && (
                               <div
-                                className="flex items-center gap-2 md:w-1/2"
+                                className="flex items-center gap-2 lg:w-1/3"
                                 id="form-registrando-para"
                               >
                                 <Avatar className="w-8 h-8">
@@ -865,7 +1048,7 @@ export default function RegistroVotosPage() {
 
                                 <div>
                                   <p className="text-xs text-muted-foreground font-medium">
-                                    Registrando para <span className="font-bold">Líder</span>:
+                                    Registrando <span className="font-bold">Digitador</span>:
                                   </p>
                                   <p className="text-sm font-medium text-foreground">
                                     {userName || "sin líder asociado"}
@@ -874,15 +1057,136 @@ export default function RegistroVotosPage() {
                               </div>
                             )}
 
-                            {/* DERECHA */}
-                            <div className="space-y-2 md:w-1/2" id="form-leader">
-                              <Label htmlFor="leaderId">Recomendado por</Label>
+                            {/* Centro - LÍDER */}
+                            <div className="space-y-2 lg:w-1/3" id="form-lider">
+                              <Label htmlFor="liderId">Asignar Líder</Label>
+
+                              <div id="form-lider-input" className="relative">
+                                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                                  <Search className="w-4 h-4 text-muted-foreground" />
+                                  <input
+                                    id="liderId"
+                                    type="text"
+                                    placeholder="Buscar Líder... (Enter para crear nuevo)"
+                                    value={searchLider}
+                                    onChange={(e) => setSearchLider(e.target.value)}
+                                    onFocus={() => setShowLiderDropdown(true)}
+                                    onBlur={() => setTimeout(() => setShowLiderDropdown(false), 200)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter' && searchLider.trim()) {
+                                        console.log('🔍 Enter presionado - Buscando Líder:', searchLider)
+                                        const existe = recomendados.some(r => r.name.toLowerCase() === searchLider.toLowerCase())
+
+                                        console.log('📋 ¿Existe en la lista?:', existe)
+
+                                        if (!existe) {
+                                          try {
+                                            console.log('✨ Creando nuevo líder:', searchLider)
+                                            setLoading(true)
+                                            const token = localStorage.getItem('pspvote_token')
+
+                                            if (!token) {
+                                              throw new Error('No hay token de autenticación')
+                                            }
+
+                                            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leaders`, {
+                                              method: 'POST',
+                                              headers: {
+                                                'Content-Type': 'application/json',
+                                                'Authorization': `Bearer ${token}`,
+                                              },
+                                              body: JSON.stringify({
+                                                name: searchLider.trim(),
+                                                phone: "0000000000",
+                                                address: "0000000000"
+                                              }),
+                                            })
+
+                                            if (!response.ok) {
+                                              const errorData = await response.json().catch(() => ({}))
+                                              throw new Error(errorData.message || 'Error al crear el líder')
+                                            }
+
+                                            const nuevoLider = await response.json()
+                                            const liderData = nuevoLider.leader
+
+                                            if (!liderData || !liderData.id) {
+                                              throw new Error('El servidor no devolvió un ID válido para el nuevo líder')
+                                            }
+
+                                            setRecomendados(prev => [...prev, liderData])
+                                            setFormData(prev => ({ ...prev, leaderId: liderData.id }))
+                                            // Aplicar a todas las filas de votanteRows
+                                            setVotanteRows(prev => prev.map(row => ({ ...row, leaderId: liderData.id })))
+                                            setSearchLider(liderData.name)
+                                            setShowLiderDropdown(false)
+
+                                            toast.success(`¡Líder "${liderData.name}" creado y asignado a todos los registros!`)
+                                          } catch (err) {
+                                            const errorMessage = err instanceof Error ? err.message : 'Error al crear el líder'
+                                            console.error('❌ Error al crear líder:', errorMessage, err)
+                                            toast.error(errorMessage)
+                                          } finally {
+                                            setLoading(false)
+                                          }
+                                        }
+                                      }
+                                    }}
+                                    className="flex-1 bg-transparent outline-none text-sm"
+                                  />
+                                  {searchLider && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSearchLider("")
+                                        setShowLiderDropdown(true)
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {showLiderDropdown && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                                    {recomendados.filter(r => r.name.toLowerCase().includes(searchLider.toLowerCase())).length > 0 ? (
+                                      recomendados.filter(r => r.name.toLowerCase().includes(searchLider.toLowerCase())).map((lider) => (
+                                        <button
+                                          key={lider.id}
+                                          type="button"
+                                          onMouseDown={() => {
+                                            // Aplicar a formData (para edición individual)
+                                            setFormData({ ...formData, leaderId: lider.id })
+                                            // Aplicar a todas las filas de votanteRows (para creación masiva)
+                                            setVotanteRows(prev => prev.map(row => ({ ...row, leaderId: lider.id })))
+                                            setSearchLider(lider.name)
+                                            setShowLiderDropdown(false)
+                                          }}
+                                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                                        >
+                                          {lider.name}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                        No se encontraron líderes
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Derecha - RECOMENDADO */}
+                            <div className="space-y-2 lg:w-1/3" id="form-leader">
+                              <Label htmlFor="recommendedById">Recomendado por</Label>
 
                               <div id="form-recomendado" className="relative">
                                 <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
                                   <Search className="w-4 h-4 text-muted-foreground" />
                                   <input
-                                    id="leaderId"
+                                    id="recommendedById"
                                     type="text"
                                     placeholder="Buscar Recomendado... (Enter para crear nuevo)"
                                     value={searchRecomendado}
@@ -948,6 +1252,10 @@ export default function RegistroVotosPage() {
                                               return updated
                                             })
 
+                                            // Aplicar a todas las filas de votanteRows
+                                            setVotanteRows(prev => prev.map(row => ({ ...row, recommendedById: liderData.id })))
+                                            console.log('📋 recommendedById aplicado a todas las filas')
+
                                             // Actualizar el search para mostrar el nombre del nuevo líder
                                             setSearchRecomendado(liderData.name)
                                             console.log('🏷️ Campo de búsqueda actualizado a:', liderData.name)
@@ -955,7 +1263,7 @@ export default function RegistroVotosPage() {
                                             // Cerrar el dropdown
                                             setShowRecomendadosDropdown(false)
 
-                                            toast.success(`¡Líder "${liderData.name}" creado y asignado exitosamente!`)
+                                            toast.success(`¡Líder "${liderData.name}" creado y asignado a todos los registros!`)
                                           } catch (err) {
                                             const errorMessage = err instanceof Error ? err.message : 'Error al crear el líder'
                                             console.error('❌ Error al crear líder:', errorMessage, err)
@@ -990,7 +1298,10 @@ export default function RegistroVotosPage() {
                                           key={rec.id}
                                           type="button"
                                           onMouseDown={() => {
+                                            // Aplicar a formData (para edición individual)
                                             setFormData({ ...formData, recommendedById: rec.id })
+                                            // Aplicar a todas las filas de votanteRows (para creación masiva)
+                                            setVotanteRows(prev => prev.map(row => ({ ...row, recommendedById: rec.id })))
                                             setSearchRecomendado(rec.name)
                                             setShowRecomendadosDropdown(false)
                                           }}
@@ -1013,342 +1324,440 @@ export default function RegistroVotosPage() {
                         </div>
 
 
-                        {/* Formulario */}
-                        <form onSubmit={handleSubmit} className="space-y-4 p-6">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="form-nombres">Nombres</Label>
-                              <Input
-                                id="form-nombres"
-                                value={formData.nombre1}
-                                onChange={(e) => setFormData({ ...formData, nombre1: e.target.value })}
-                                placeholder="Ej: Juan Manuel"
-                                required
-                              />
+                        {/* MODO EDICIÓN: Formulario con estructura horizontal */}
+                        {editingVotante ? (
+                          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                            {/* Tabla horizontal para editar un votante */}
+                            <div className="overflow-x-auto border border-border rounded-lg">
+                              <table className="w-full text-sm table-fixed">
+                                <colgroup>
+                                  <col className="w-[120px]" />
+                                  <col className="w-[120px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[130px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[130px]" />
+                                  <col className="w-[140px]" />
+                                </colgroup>
+                                <thead>
+                                  <tr className="bg-muted/50 border-b border-border">
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Nombres</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Apellidos</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Cédula</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Teléfono</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Dirección</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Barrio</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Puesto</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Programa</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr className="border-b border-border hover:bg-muted/50">
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Nombres"
+                                        value={formData.nombre1}
+                                        onChange={(e) => setFormData({ ...formData, nombre1: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[120px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Apellidos"
+                                        value={formData.apellido1}
+                                        onChange={(e) => setFormData({ ...formData, apellido1: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[120px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Cédula"
+                                        value={formData.cedula}
+                                        onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[110px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Teléfono"
+                                        value={formData.telefono}
+                                        onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[110px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Dirección"
+                                        value={formData.direccion}
+                                        onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[130px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Barrio"
+                                        value={formData.barrio}
+                                        onChange={(e) => setFormData({ ...formData, barrio: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[110px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Select value={formData.puestoVotacion} onValueChange={(value) => setFormData({ ...formData, puestoVotacion: value })}>
+                                        <SelectTrigger className="h-8 text-xs w-full max-w-[130px]">
+                                          <SelectValue placeholder="Sel." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {puestosVotacion.map((puesto) => (
+                                            <SelectItem key={puesto.id} value={puesto.id}>
+                                              {puesto.puesto}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Select
+                                        value={formData.programaLabel}
+                                        onValueChange={(value) => {
+                                          const prog = programasOpciones.find(p => p.label === value)
+                                          if (prog) {
+                                            setFormData({
+                                              ...formData,
+                                              programaId: prog.programaId,
+                                              programaLabel: prog.label,
+                                              sedeId: prog.sedeId || null,
+                                              tipoVinculacionId: prog.tipoVinculacionId,
+                                              esPago: prog.esPago,
+                                            })
+                                          }
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs w-full max-w-[140px]">
+                                          <SelectValue placeholder="Sel." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {programasOpciones.map((prog) => (
+                                            <SelectItem key={prog.label} value={prog.label}>
+                                              {prog.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
                             </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="form-apellidos">Apellidos</Label>
-                              <Input
-                                id="form-apellidos"
-                                value={formData.apellido1}
-                                onChange={(e) => setFormData({ ...formData, apellido1: e.target.value })}
-                                placeholder="Ej: Martinez Lopez"
-                                required
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="form-cedula">Cédula</Label>
-                              <Input
-                                id="form-cedula"
-                                value={formData.cedula}
-                                onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
-                                required
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="form-telefono">Teléfono</Label>
-                              <Input
-                                id="form-telefono"
-                                value={formData.telefono}
-                                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                                required
-                              />
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="form-direccion">Dirección</Label>
-                            <Input
-                              id="form-direccion"
-                              value={formData.direccion}
-                              onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                              required
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="form-barrio">Barrio</Label>
-                              <Input
-                                id="form-barrio"
-                                value={formData.barrio}
-                                onChange={(e) => setFormData({ ...formData, barrio: e.target.value })}
-                                required
-                              />
-                            </div>
-                            <div id="form-puesto" className="space-y-2">
-                              <Label htmlFor="puestoVotacion">Puesto de Votación</Label>
 
-                              <div className="relative">
-                                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
-                                  <Search className="w-4 h-4 text-muted-foreground" />
-
-                                  <input
-                                    id="puestoVotacion"
-                                    type="text"
-                                    placeholder="Buscar puesto..."
-                                    value={searchPuesto}
-                                    onChange={(e) => {
-                                      setSearchPuesto(e.target.value)
-                                      setFormData({ ...formData, puestoVotacion: "" })
-                                      setShowPuestosDropdown(true)
+                            {/* Campos adicionales debajo de la tabla */}
+                            <div className="space-y-4 hidden pt-4 border-t border-border">
+                              {/* Recomendado Por y Líder en horizontal */}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="edit-recomendado">Recomendado Por</Label>
+                                  <Select
+                                    value={formData.recommendedById}
+                                    onValueChange={(value) => {
+                                      const rec = recomendados.find(r => r.id === value)
+                                      setFormData({ ...formData, recommendedById: value })
+                                      if (rec) setSearchRecomendado(rec.name)
                                     }}
-                                    onFocus={() => setShowPuestosDropdown(true)}
-                                    className="flex-1 bg-transparent outline-none text-sm"
-                                  />
-
-                                  {searchPuesto && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSearchPuesto("")
-                                        setFormData({ ...formData, puestoVotacion: "" })
-                                        setShowPuestosDropdown(true)
-                                      }}
-                                      className="text-muted-foreground hover:text-foreground transition-colors"
-                                      title="Limpiar"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  )}
+                                  >
+                                    <SelectTrigger id="edit-recomendado" className="h-8 text-xs">
+                                      <SelectValue placeholder="Seleccionar..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {recomendados.map((rec) => (
+                                        <SelectItem key={rec.id} value={rec.id}>
+                                          {rec.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </div>
 
-                                {/* DROPDOWN */}
-                                {showPuestosDropdown && (
-                                  <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
-                                    <div className="p-2 border-b border-border text-xs text-muted-foreground">
-                                      {puestosFiltered.length}{" "}
-                                      {puestosFiltered.length === 1 ? "puesto encontrado" : "puestos encontrados"}
-                                    </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="edit-lider">Líder</Label>
+                                  <Select
+                                    value={formData.leaderId}
+                                    onValueChange={(value) => {
+                                      const lider = recomendados.find(r => r.id === value)
+                                      setFormData({ ...formData, leaderId: value })
+                                      if (lider) setSearchLider(lider.name)
+                                    }}
+                                  >
+                                    <SelectTrigger id="edit-lider" className="h-8 text-xs">
+                                      <SelectValue placeholder="Seleccionar..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {recomendados.map((lider) => (
+                                        <SelectItem key={lider.id} value={lider.id}>
+                                          {lider.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
 
-                                    {puestosFiltered.length > 0 ? (
-                                      puestosFiltered.map((puesto) => (
-                                        <button
-                                          key={puesto.id}
-                                          type="button"
-                                          onMouseDown={() => {
-                                            setFormData({ ...formData, puestoVotacion: puesto.id })
-                                            setSearchPuesto(puesto.puesto)
-                                            setShowPuestosDropdown(false)
-                                          }}
-                                          className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0
-                                            ${formData.puestoVotacion === puesto.id
-                                              ? "bg-accent text-accent-foreground font-medium"
-                                              : ""
+                              {/* Es Pago */}
+                              <div className="flex items-center gap-2">
+                                <input
+                                  id="edit-pago"
+                                  type="checkbox"
+                                  checked={formData.esPago}
+                                  onChange={(e) => setFormData({ ...formData, esPago: e.target.checked })}
+                                  className="rounded border-border"
+                                />
+                                <Label htmlFor="edit-pago" className="text-sm">Es Pago</Label>
+                              </div>
+                            </div>
+
+                            {/* Botones */}
+                            <div className="flex justify-end gap-3 pt-4">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  resetForm()
+                                  setIsDialogOpen(false)
+                                }}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button
+                                type="submit"
+                                className="bg-primary text-primary-foreground"
+                                disabled={loading}
+                              >
+                                {loading ? "Guardando..." : "Guardar Cambios"}
+                              </Button>
+                            </div>
+                          </form>
+                        ) : (
+                          <form onSubmit={handleSubmitRows} className="p-6 space-y-4">
+                            {/* Tabla de Votantes - Modo Creación */}
+                            {/* Tabla horizontal */}
+                            <div className="overflow-x-auto border border-border rounded-lg">
+                              <table className="w-full text-sm table-fixed">
+                                <colgroup>
+                                  <col className="w-[120px]" />
+                                  <col className="w-[120px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[130px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[130px]" />
+                                  <col className="w-[140px]" />
+                                  <col className="w-[60px]" />
+                                </colgroup>
+                                <thead>
+                                  <tr className="bg-muted/50 border-b border-border">
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Nombres</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Apellidos</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Cédula</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Teléfono</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Dirección</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Barrio</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Puesto</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Programa</th>
+                                    <th className="px-2 py-2 text-center font-medium text-xs">Acciones</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <AnimatePresence mode="popLayout">
+                                    {votanteRows.map((row, index) => {
+                                      return (
+                                        <motion.tr
+                                          key={`${row.id}-${index}`}
+                                          initial={{ opacity: 0, y: 10 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          exit={{ opacity: 0, y: -10 }}
+                                          className={`border-b border-border ${row.error ? 'bg-red-50/50' : 'hover:bg-muted/50'
                                             }`}
                                         >
-                                          {puesto.puesto}
-                                        </button>
-                                      ))
-                                    ) : (
-                                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                                        No se encontraron puestos
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Nombres"
+                                              value={row.nombre1}
+                                              onChange={(e) => updateRow(row.id, { nombre1: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[120px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Apellidos"
+                                              value={row.apellido1}
+                                              onChange={(e) => updateRow(row.id, { apellido1: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[120px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Cédula"
+                                              value={row.cedula}
+                                              onChange={(e) => updateRow(row.id, { cedula: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Teléfono"
+                                              value={row.telefono}
+                                              onChange={(e) => updateRow(row.id, { telefono: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Dirección"
+                                              value={row.direccion}
+                                              onChange={(e) => updateRow(row.id, { direccion: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[130px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Barrio"
+                                              value={row.barrio}
+                                              onChange={(e) => updateRow(row.id, { barrio: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Select value={row.puestoVotacion} onValueChange={(value) => updateRow(row.id, { puestoVotacion: value })}>
+                                              <SelectTrigger className={`h-8 text-xs w-full max-w-[130px] ${row.error ? 'border-red-400' : ''
+                                                }`}>
+                                                <SelectValue placeholder="Sel." />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {puestosVotacion.map((puesto) => (
+                                                  <SelectItem key={puesto.id} value={puesto.id}>
+                                                    {puesto.puesto}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Select
+                                              value={row.programaLabel || ""}
+                                              onValueChange={(value) => {
+                                                const prog = programasOpciones.find(p => p.label === value)
+                                                if (prog) {
+                                                  updateRow(row.id, {
+                                                    programaId: prog.programaId,
+                                                    programaLabel: prog.label,
+                                                    sedeId: prog.sedeId || null,
+                                                    tipoVinculacionId: prog.tipoVinculacionId,
+                                                    esPago: prog.esPago,
+                                                  })
+                                                }
+                                              }}
+                                            >
+                                              <SelectTrigger className={`h-8 text-xs w-full max-w-[140px] ${row.error ? 'border-red-400' : ''
+                                                }`}>
+                                                <SelectValue placeholder="Sel." />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                {programasOpciones.map((prog) => (
+                                                  <SelectItem key={prog.label} value={prog.label}>
+                                                    {prog.label}
+                                                  </SelectItem>
+                                                ))}
+                                              </SelectContent>
+                                            </Select>
+                                          </td>
+                                          <td className="px-2 py-2 text-center overflow-hidden">
+                                            <button
+                                              type="button"
+                                              onClick={() => deleteRow(row.id)}
+                                              className="text-muted-foreground hover:text-red-600"
+                                              title="Eliminar"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          </td>
+                                        </motion.tr>
+                                      )
+                                    })}
+                                  </AnimatePresence>
+                                </tbody>
+                              </table>
                             </div>
 
-                          </div>
-
-                          {/* Leader */}
-                          {/*<div className="space-y-2" id="form-leader">
-                            <Label htmlFor="leaderId">Líder</Label>
-                            <div className="relative">
-                              <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
-                                <Search className="w-4 h-4 text-muted-foreground" />
-                                <input
-                                  id="leaderId"
-                                  type="text"
-                                  placeholder="Buscar líder..."
-                                  value={searchRecomendado}
-                                  onChange={(e) => setSearchRecomendado(e.target.value)}
-                                  onClick={() => setShowRecomendadosDropdown(true)}
-                                  onFocus={() => setShowRecomendadosDropdown(true)}
-                                  onBlur={() => setTimeout(() => setShowRecomendadosDropdown(false), 200)}
-                                  className="flex-1 bg-transparent outline-none text-sm"
-                                />
-                                {searchRecomendado && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSearchRecomendado("")
-                                      setShowRecomendadosDropdown(true)
-                                    }}
-                                    className="text-muted-foreground hover:text-foreground transition-colors"
-                                    title="Limpiar búsqueda"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                )}
+                            {/* Mostrar errores debajo de la tabla */}
+                            {votanteRows.some(r => r.error) && (
+                              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <p className="text-sm font-semibold text-red-700 mb-2">Errores encontrados:</p>
+                                {votanteRows.map((row) => row.error && (
+                                  <div key={row.id} className="text-xs text-red-600 mb-1">
+                                    • <strong>{row.nombre1} {row.apellido1}</strong>: {row.error}
+                                  </div>
+                                ))}
                               </div>
+                            )}
 
-                              {showRecomendadosDropdown && (
-                                <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
-                                  <div className="p-2 border-b border-border text-xs text-muted-foreground">
-                                    {recomendadosFiltered.length} {recomendadosFiltered.length === 1 ? "recomendado encontrado" : "recomendados encontrados"}
-                                  </div>
-                                  {recomendadosFiltered.length > 0 ? (
-                                    recomendadosFiltered.map((rec) => (
-                                      <button
-                                        key={rec.id}
-                                        type="button"
-                                        onMouseDown={() => {
-                                          setFormData({ ...formData, recommendedById: rec.id })
-                                          setSearchRecomendado(rec.name)
-                                          setShowRecomendadosDropdown(false)
-                                        }}
-                                        className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0 ${formData.recommendedById === rec.id ? "bg-accent text-accent-foreground font-medium" : ""
-                                          }`}
-                                      >
-                                        {rec.name}
-                                      </button>
-                                    ))
-                                  ) : (
-                                    <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                                      No se encontraron recomendados
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                            {/* Botón para agregar fila */}
+                            <div className="flex justify-between items-center pt-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={addNewRow}
+                                className="gap-2"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Agregar Fila
+                              </Button>
 
-                              {formData.recommendedById && (
-                                <div className="mt-2 p-3 bg-accent/10 rounded-md border border-accent/30 flex items-start justify-between">
-                                  <div>
-                                    <p className="text-xs text-muted-foreground font-medium">Líder seleccionado:</p>
-                                    <p className="text-sm text-foreground font-medium">{recomendadoSeleccionado?.name}</p>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setFormData({ ...formData, recommendedById: "" })
-                                      setSearchRecomendado("")
-                                    }}
-                                    className="text-muted-foreground hover:text-foreground ml-2"
-                                    title="Cambiar selección"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>*/}
-
-                          {/* Programa */}
-                          <div className="space-y-2" id="form-programa">
-                            <Label htmlFor="programa">Programa</Label>
-
-                            <div className="relative">
-                              <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
-                                <Search className="w-4 h-4 text-muted-foreground" />
-
-                                <input
-                                  id="programa"
-                                  type="text"
-                                  placeholder="Buscar programa..."
-                                  value={searchPrograma}
-                                  onChange={(e) => {
-                                    setSearchPrograma(e.target.value)
-                                    setFormData({
-                                      ...formData,
-                                      programaId: "",
-                                      sedeId: "",
-                                      tipoVinculacionId: "",
-                                      esPago: false,
-                                    })
-                                    setShowProgramasDropdown(true)
+                              {/* Botones de envío */}
+                              <div className="flex gap-3">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (!hasUnsavedChanges()) {
+                                      resetForm()
+                                      setIsDialogOpen(false)
+                                    } else {
+                                      setShowConfirmClose(true)
+                                    }
                                   }}
-                                  onFocus={() => setShowProgramasDropdown(true)}
-                                  className="flex-1 bg-transparent outline-none text-sm"
-                                />
-
-                                {searchPrograma && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setSearchPrograma("")
-                                      setFormData({
-                                        ...formData,
-                                        programaId: "",
-                                        sedeId: "",
-                                        tipoVinculacionId: "",
-                                        esPago: false,
-                                      })
-                                      setShowProgramasDropdown(true)
-                                    }}
-                                    className="text-muted-foreground hover:text-foreground transition-colors"
-                                    title="Limpiar"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                )}
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button
+                                  id="form-submit"
+                                  type="submit"
+                                  className="bg-primary text-primary-foreground"
+                                  disabled={loading}
+                                >
+                                  {loading ? "Registrando..." : "Registrar Todo"}
+                                </Button>
                               </div>
-
-                              {/* DROPDOWN */}
-                              {showProgramasDropdown && (
-                                <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
-                                  <div className="p-2 border-b border-border text-xs text-muted-foreground">
-                                    {programasOpsFiltered.length}{" "}
-                                    {programasOpsFiltered.length === 1
-                                      ? "programa encontrado"
-                                      : "programas encontrados"}
-                                  </div>
-
-                                  {programasOpsFiltered.length > 0 ? (
-                                    programasOpsFiltered.map((prog) => (
-                                      <button
-                                        key={`${prog.programaId}-${prog.sedeId}-${prog.tipoVinculacionId}`}
-                                        type="button"
-                                        onMouseDown={() => {
-                                          setFormData({
-                                            ...formData,
-                                            programaId: prog.programaId,
-                                            sedeId: prog.sedeId || "",
-                                            tipoVinculacionId: prog.tipoVinculacionId,
-                                            esPago: prog.esPago,
-                                          })
-                                          setSearchPrograma(prog.label)
-                                          setShowProgramasDropdown(false)
-                                        }}
-                                        className={`w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors border-b border-border last:border-b-0
-                ${formData.programaId === prog.programaId &&
-                                            formData.tipoVinculacionId === prog.tipoVinculacionId
-                                            ? "bg-accent text-accent-foreground font-medium"
-                                            : ""
-                                          }`}
-                                      >
-                                        {prog.label}
-                                      </button>
-                                    ))
-                                  ) : (
-                                    <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                                      No se encontraron programas
-                                    </div>
-                                  )}
-                                </div>
-                              )}
                             </div>
-                          </div>
-
-
-                          {/* Botones */}
-                          <div className="flex justify-end gap-3 pt-4 border-t border-border mt-6">
-                            <Button type="button" variant="outline" onClick={() => {
-                              if (editingVotante || !hasUnsavedChanges()) {
-                                resetForm()
-                                setIsDialogOpen(false)
-                              } else {
-                                setShowConfirmClose(true)
-                              }
-                            }}>
-                              Cancelar
-                            </Button>
-                            <Button id="form-submit" type="submit" className="bg-primary text-primary-foreground" disabled={loading}>
-                              {loading ? "Registrando..." : editingVotante ? "Actualizar" : "Registrar"}
-                            </Button>
-                          </div>
-                        </form>
+                          </form>
+                        )}
                       </div>
                     </div>
                   )}
