@@ -117,12 +117,14 @@ interface Votante {
   creadoPor?: string
   isDuplicate?: boolean
   isActive?: boolean
+  leaderId?: string
+  recommendedById?: string
 }
 
 // Los datos se cargan desde el API
 const initialVotantes: Votante[] = []
 
-const tabs = ["Todos", /*"Verificados", "Registrados", "Pendientes"*/]
+const tabs = ["Todos", "Digitador", "Líder", "Recomendado"]
 
 const Loading = () => null
 
@@ -153,6 +155,7 @@ export default function RegistroVotosPage() {
   const [loadingProgramas, setLoadingProgramas] = useState(true)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userName, setUserName] = useState<string>("")
+  const [currentUserLeaderId, setCurrentUserLeaderId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   const [toggleStatusId, setToggleStatusId] = useState<string | null>(null)
@@ -202,6 +205,8 @@ export default function RegistroVotosPage() {
           creadoPor: votante.leader?.name || 'N/A',
           isDuplicate: votante.isDuplicate || false,
           isActive: votante.isActive || false,
+          leaderId: votante.leaderId || undefined,
+          recommendedById: votante.recommendedById || undefined,
         }))
         setVotantes(votantesFormateados)
       }
@@ -224,6 +229,8 @@ export default function RegistroVotosPage() {
       try {
         const userData = JSON.parse(userDataStr)
         setUserName(userData.leader?.name || userData.username || "sin leader asociado")
+        // Obtener el leaderId del usuario actual (del digitador logueado)
+        setCurrentUserLeaderId(userData.leaderId || userData.leader?.id || null)
       } catch (err) {
         console.error('Error al parsear datos del usuario:', err)
       }
@@ -398,7 +405,7 @@ export default function RegistroVotosPage() {
     }
   }
 
-  const filteredVotantes = votantes.filter((votante) => {
+  const filteredVotantes = votantes.filter((votante: any) => {
     const normalizedSearch = normalizeText(searchTerm)
     const matchesSearch =
       normalizeText(votante.nombre1).includes(normalizedSearch) ||
@@ -407,12 +414,14 @@ export default function RegistroVotosPage() {
 
     const matchesTab =
       activeTab === "Todos" ||
-      (activeTab === "Verificados" && votante.estado === "verificado") ||
-      (activeTab === "Registrados" && votante.estado === "registrado") ||
-      (activeTab === "Pendientes" && votante.estado === "pendiente")
+      (activeTab === "Digitador" && votante.leaderId === currentUserLeaderId) ||
+      (activeTab === "Líder" && votante.leaderId !== currentUserLeaderId) ||
+      (activeTab === "Recomendado" && votante.recommendedById)
 
     return matchesSearch && matchesTab
   })
+
+
 
   // Lógica de paginación
   const totalPages = Math.ceil(filteredVotantes.length / itemsPerPage)
@@ -440,9 +449,9 @@ export default function RegistroVotosPage() {
   useEffect(() => {
     if (editingVotante && formData.programaId && !formData.programaLabel && programasOpciones.length > 0) {
       const programaEncontrado = programasOpciones.find(
-        p => p.programaId === formData.programaId && 
-             p.tipoVinculacionId === formData.tipoVinculacionId &&
-             (p.sedeId === formData.sedeId || (p.sedeId === null && formData.sedeId === null))
+        p => p.programaId === formData.programaId &&
+          p.tipoVinculacionId === formData.tipoVinculacionId &&
+          (p.sedeId === formData.sedeId || (p.sedeId === null && formData.sedeId === null))
       )
       if (programaEncontrado) {
         setFormData(prev => ({
@@ -456,8 +465,8 @@ export default function RegistroVotosPage() {
   const addNewRow = () => {
     const newId = generateUniqueId()
     // Nueva fila hereda automáticamente leaderId y recommendedById de la cabecera (formData)
-    setVotanteRows([...votanteRows, { 
-      ...initialFormData, 
+    setVotanteRows([...votanteRows, {
+      ...initialFormData,
       id: newId,
       leaderId: formData.leaderId,
       recommendedById: formData.recommendedById
@@ -737,12 +746,12 @@ export default function RegistroVotosPage() {
       setEditingVotante(votante)
       // Asegurar que tipoVinculacionId siempre venga del tipoId del backend
       const tipoVinculacionIdValue = votanteData.tipoId || votanteData.tipoVinculacionId || ""
-      
+
       // Buscar el label del programa que corresponde a esta combinación
       const programaEncontrado = programasOpciones.find(
-        p => p.programaId === votanteData.programaId && 
-             p.tipoVinculacionId === votanteData.tipoId &&
-             (p.sedeId === votanteData.sedeId || (p.sedeId === null && votanteData.sedeId === null))
+        p => p.programaId === votanteData.programaId &&
+          p.tipoVinculacionId === votanteData.tipoId &&
+          (p.sedeId === votanteData.sedeId || (p.sedeId === null && votanteData.sedeId === null))
       )
       const programaLabelValue = programaEncontrado ? programaEncontrado.label : ""
 
@@ -907,8 +916,8 @@ export default function RegistroVotosPage() {
   const resetForm = () => {
     setFormData(initialFormData)
     // Primera fila hereda leaderId y recommendedById si ya estaban seleccionados
-    setVotanteRows([{ 
-      ...initialFormData, 
+    setVotanteRows([{
+      ...initialFormData,
       id: generateUniqueId(),
       leaderId: formData.leaderId,
       recommendedById: formData.recommendedById
