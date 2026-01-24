@@ -124,7 +124,13 @@ interface Votante {
 // Los datos se cargan desde el API
 const initialVotantes: Votante[] = []
 
-const tabs = ["Todos", "Digitador", "Líder", "Recomendado"]
+// Tabs dinámicos según el rol
+const getAvailableTabs = (role: string | null) => {
+  if (role === "ADMIN") {
+    return ["Todos"]
+  }
+  return ["Todos", "Digitador", "Líder", "Recomendado"]
+}
 
 const Loading = () => null
 
@@ -414,13 +420,35 @@ export default function RegistroVotosPage() {
 
     const matchesTab =
       activeTab === "Todos" ||
-      (activeTab === "Digitador" && votante.leaderId === currentUserLeaderId) ||
-      (activeTab === "Líder" && votante.leaderId !== currentUserLeaderId) ||
+      (activeTab === "Digitador" && votante.leaderId !== currentUserLeaderId) ||
+      (activeTab === "Líder" && votante.leaderId === currentUserLeaderId) ||
       (activeTab === "Recomendado" && votante.recommendedById)
 
     return matchesSearch && matchesTab
   })
 
+  // Log para debuguear filtros de leaderId
+  useEffect(() => {
+    console.log('🔍 currentUserLeaderId:', currentUserLeaderId)
+    console.log('📊 Total de votantes:', votantes.length)
+    
+    const digitadorRegistros = votantes.filter(v => v.leaderId !== currentUserLeaderId)
+    const liderRegistros = votantes.filter(v => v.leaderId === currentUserLeaderId)
+    
+    console.log('✅ Registros que NO coinciden (Digitador):', digitadorRegistros.length)
+    console.log('   Detalles:', digitadorRegistros.map(v => ({ 
+      id: v.id, 
+      nombre: `${v.nombre1} ${v.apellido1}`, 
+      leaderId: v.leaderId 
+    })))
+    
+    console.log('❌ Registros que coinciden (Líder):', liderRegistros.length)
+    console.log('   Detalles:', liderRegistros.map(v => ({ 
+      id: v.id, 
+      nombre: `${v.nombre1} ${v.apellido1}`, 
+      leaderId: v.leaderId 
+    })))
+  }, [currentUserLeaderId, votantes])
 
 
   // Lógica de paginación
@@ -1776,7 +1804,7 @@ export default function RegistroVotosPage() {
 
             {/* Tabs */}
             <div className="flex gap-1 mt-4 border-b border-border -mb-px">
-              {tabs.map((tab) => (
+              {getAvailableTabs(userRole).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
