@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import { ChangePasswordDialog } from "@/components/change-password-dialog"
 import { getUser, type User as UserType } from "@/lib/auth"
 
 export default function PerfilPage() {
@@ -19,6 +20,7 @@ export default function PerfilPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [openChangePasswordDialog, setOpenChangePasswordDialog] = useState(false)
 
   useEffect(() => {
     const currentUser = getUser()
@@ -65,6 +67,11 @@ export default function PerfilPage() {
   const handleNotificationsToggle = (enabled: boolean) => {
     setNotificationsEnabled(enabled)
     localStorage.setItem("notifications-enabled", enabled.toString())
+  }
+
+  const handleChangePassword = () => {
+    // El componente ChangePasswordDialog se encargará de redirigir después de cambiar
+    setOpenChangePasswordDialog(false)
   }
 
   if (isLoading) {
@@ -121,7 +128,7 @@ export default function PerfilPage() {
             variant="outline"
             size="sm"
             onClick={() => router.back()}
-            className="gap-2"
+            className="gap-2 hover:bg-primary/10 focus:ring-2 focus:ring-primary cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Volver
@@ -141,14 +148,14 @@ export default function PerfilPage() {
                 <div className="flex flex-col items-center gap-4">
                   <Avatar className="w-24 h-24">
                     <AvatarFallback className="bg-primary text-primary-foreground text-xl font-bold">
-                      {user.role?.name === "LIDER" 
+                      {user.role?.name === "LIDER"
                         ? user.leader?.name?.charAt(0)
                         : user.username?.charAt(0) || user.name?.charAt(0) || "U"}
                     </AvatarFallback>
                   </Avatar>
                   <Button variant="outline" size="sm" className="gap-2">
-                    <Edit2 className="w-4 h-4" />
-                    Cambiar Avatar
+                    <Edit2 className="w-4 hidden h-4" />
+                    Avatar
                   </Button>
                 </div>
 
@@ -160,7 +167,7 @@ export default function PerfilPage() {
                       <UserIcon className="w-4 h-4" />
                       ID de Usuario
                     </label>
-                    <p className="text-xs font-mono text-foreground break-all">{user.id || "No especificado"}</p>
+                    <p className="text-xs font-mono text-foreground break-all truncate w-2/5">{user.id || "No especificado"}</p>
                   </div>
 
                   {/* Username */}
@@ -173,15 +180,26 @@ export default function PerfilPage() {
                   </div>
 
                   {/* Rol */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                      <Shield className="w-4 h-4" />
-                      Rol
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <Badge className="bg-primary text-primary-foreground">
-                        {user.role?.name || "Usuario"}
-                      </Badge>
+                  <div className="flex flex-row gap-3">
+
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                        <Shield className="w-4 h-4" />
+                        Rol
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-primary text-primary-foreground">
+                          {user.role?.name || "Usuario"}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                        <Shield className="w-4 h-4" />
+                        Role ID
+                      </label>
+                      <p className="text-xs mt-3 font-mono text-foreground break-all truncate w-2/5">{user.roleId || "No especificado"}</p>
                     </div>
                   </div>
 
@@ -194,23 +212,15 @@ export default function PerfilPage() {
                     <p className="text-sm font-semibold text-foreground">
                       {user.createdAt
                         ? new Date(user.createdAt).toLocaleDateString("es-ES", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })
                         : "No especificado"}
                     </p>
                   </div>
 
-                  {/* Role ID */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                      <Shield className="w-4 h-4" />
-                      Role ID
-                    </label>
-                    <p className="text-xs font-mono text-foreground break-all">{user.roleId || "No especificado"}</p>
-                  </div>
-
+                  
                   {/* Leader Info - Solo si es LIDER */}
                   {user.role?.name === "LIDER" && user.leader && (
                     <div className="col-span-2">
@@ -222,7 +232,7 @@ export default function PerfilPage() {
                         <p className="font-semibold text-foreground">Nombre: {user.leader.name}</p>
                         <p className="text-sm text-muted-foreground">Teléfono: {user.leader.phone}</p>
                         <p className="text-sm text-muted-foreground">Dirección: {user.leader.address}</p>
-                        <p className="text-xs font-mono text-muted-foreground break-all">ID: {user.leader.id}</p>
+                        <p className="text-xs font-mono text-muted-foreground break-all truncate w-2/5">ID: {user.leader.id}</p>
                       </div>
                     </div>
                   )}
@@ -234,7 +244,7 @@ export default function PerfilPage() {
 
         {/* Card - Seguridad */}
         <motion.div variants={itemVariants}>
-          <Card className="mb-6 hidden">
+          <Card className="mb-6 ">
             <CardHeader>
               <CardTitle>Seguridad</CardTitle>
               <CardDescription>Gestiona tu acceso y contraseña</CardDescription>
@@ -243,16 +253,20 @@ export default function PerfilPage() {
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <div>
                   <p className="font-medium text-foreground">Contraseña</p>
-                  <p className="text-sm text-muted-foreground">Última actualización hace 3 meses</p>
+                  <p className="text-sm text-muted-foreground">Al cambiar la contraseña debes volver a inciar session </p>
                 </div>
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setOpenChangePasswordDialog(true)}
+                >
                   Cambiar
                 </Button>
               </div>
 
               <Separator />
 
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className=" hidden items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <div>
                   <p className="font-medium text-foreground">Autenticación de Dos Factores</p>
                   <p className="text-sm text-muted-foreground">Deshabilitado</p>
@@ -273,7 +287,7 @@ export default function PerfilPage() {
               <CardDescription>Personaliza tu experiencia</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center hidden justify-between p-4 bg-muted/50 rounded-lg">
                 <div>
                   <p className="font-medium text-foreground">Notificaciones por Email</p>
                   <p className="text-sm text-muted-foreground">Recibe alertas importantes</p>
@@ -312,7 +326,7 @@ export default function PerfilPage() {
         </motion.div>
 
         {/* Botones de Acción */}
-        <motion.div variants={itemVariants} className="mt-8 flex gap-4 justify-center">
+        <motion.div variants={itemVariants} className="mt-8 hidden flex gap-4 justify-center">
           <Button variant="outline">
             Descargar mis datos
           </Button>
@@ -321,6 +335,18 @@ export default function PerfilPage() {
           </Button>
         </motion.div>
       </motion.main>
+
+      {/* Dialog Cambiar Contraseña */}
+      {user && (
+        <ChangePasswordDialog
+          open={openChangePasswordDialog}
+          onOpenChange={setOpenChangePasswordDialog}
+          onChangePassword={handleChangePassword}
+          userId={user.id}
+          username={user.username}
+          roleId={user.roleId}
+        />
+      )}
     </div>
   )
 }

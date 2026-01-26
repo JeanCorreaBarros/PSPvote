@@ -1,7 +1,7 @@
 "use client"
 
 // Dialog para agregar nuevos usuarios
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import toast from "react-hot-toast"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select"
 import { AlertCircle, Eye, EyeOff } from "lucide-react"
 import { usersApi } from "@/lib/api"
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
+
 
 interface AddUsuarioDialogProps {
   open: boolean
@@ -24,11 +26,20 @@ interface AddUsuarioDialogProps {
   onAddUsuario: (usuario: any) => void
 }
 
-// Mapeo de roles - Estos IDs deben venir del backend idealmente
-const ROLE_IDS: Record<string, string> = {
-  ADMIN: "ff1f942e-cc47-4c34-907b-3b3eb88b944f",
-  DIGITADOR: "c56631f8-8a73-4e7e-8509-c7018bc9ad25",
-  LIDER: "122b4e4e-c580-4244-a7f1-8aff23269ccb",
+interface Role {
+  id: string
+  name: string
+  isActive: boolean
+}
+
+interface Leader {
+  id: string
+  name: string
+  phone: string
+  address: string
+  recommendedById: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export function AddUsuarioDialog({
@@ -46,20 +57,68 @@ export function AddUsuarioDialog({
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [leaders, setLeaders] = useState<Array<{ id: string; username: string }>>([])
+  const [leaders, setLeaders] = useState<Leader[]>([])
+  const [leadersLoading, setLeadersLoading] = useState(true)
+  const [leaderSearchFilter, setLeaderSearchFilter] = useState("")
+  const [roles, setRoles] = useState<Role[]>([])
+  const [rolesLoading, setRolesLoading] = useState(true)
 
-  // Cargar líderes disponibles
-  const loadLeaders = async () => {
-    try {
-      const allUsers = await usersApi.getAll() as any[]
-      const leaderUsers = allUsers.filter(
-        (user: any) => user.roleId === ROLE_IDS["LIDER"]
-      )
-      setLeaders(leaderUsers)
-    } catch (error) {
-      console.error("Error al cargar líderes:", error)
+  // Construir ROLE_IDS dinámicamente desde los roles del API
+  const ROLE_IDS = roles.reduce((acc, role) => {
+    acc[role.name] = role.id
+    return acc
+  }, {} as Record<string, string>)
+
+  // Filtrar líderes según el texto de búsqueda
+  const filteredLeaders = leaders.filter((leader) =>
+    leader.name.toLowerCase().includes(leaderSearchFilter.toLowerCase()) ||
+    leader.phone.includes(leaderSearchFilter) ||
+    leader.address.toLowerCase().includes(leaderSearchFilter.toLowerCase())
+  )
+
+  // Cargar roles desde el API
+  useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        setRolesLoading(true)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/roles`)
+        if (!response.ok) {
+          throw new Error("Error al cargar los roles")
+        }
+        const rolesData = await response.json()
+        setRoles(rolesData)
+      } catch (error) {
+        console.error("Error al cargar roles:", error)
+        toast.error("Error al cargar los roles del sistema")
+      } finally {
+        setRolesLoading(false)
+      }
     }
-  }
+
+    loadRoles()
+  }, [])
+
+  // Cargar líderes desde el API
+  useEffect(() => {
+    const loadLeaders = async () => {
+      try {
+        setLeadersLoading(true)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leaders`)
+        if (!response.ok) {
+          throw new Error("Error al cargar los líderes")
+        }
+        const leadersData = await response.json()
+        setLeaders(leadersData)
+      } catch (error) {
+        console.error("Error al cargar líderes:", error)
+        toast.error("Error al cargar los líderes del sistema")
+      } finally {
+        setLeadersLoading(false)
+      }
+    }
+
+    loadLeaders()
+  }, [])
 
   const handleRoleChange = (value: string) => {
     setFormData({
@@ -130,13 +189,26 @@ export function AddUsuarioDialog({
         leaderId: "",
       })
       setErrors({})
-      
+      setLeaderSearchFilter("")
+      setShowPassword(false)
+
       toast.success("Usuario creado exitosamente", {
         id: toastId,
         duration: 4000,
       })
     } catch (error: any) {
-      const errorMessage = error?.message || "Error al crear el usuario"
+      let errorMessage = error?.message || "Error al crear el usuario"
+      
+      // Obtener el mensaje de error del objeto error
+      const errorBody = error?.message || ""
+      
+      // Validar si es un error de constraint único en el campo username
+      if (errorBody.includes("Unique constraint failed") && errorBody.includes("User_username_key")) {
+        errorMessage = `Usuario ya registrado con ese documento de identidad`
+      } else if (errorBody.includes("400") || errorBody.includes("Bad Request")) {
+        errorMessage = `Usuario ya registrado con ese documento de identidad`
+      }
+      
       if (toastId) {
         toast.error(errorMessage, {
           id: toastId,
@@ -169,6 +241,9 @@ export function AddUsuarioDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
+          <VisuallyHidden>
+            <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+          </VisuallyHidden>
           <DialogTitle>Crear Nuevo Usuario</DialogTitle>
           <DialogDescription>
             Completa el formulario para agregar un nuevo usuario al sistema
@@ -240,15 +315,17 @@ export function AddUsuarioDialog({
             <Label htmlFor="role" className="font-medium">
               Rol
             </Label>
-            <Select value={formData.role} onValueChange={handleRoleChange}>
+            <Select value={formData.role} onValueChange={handleRoleChange} disabled={rolesLoading}>
               <SelectTrigger className={errors.role ? "border-destructive" : ""}>
-                <SelectValue placeholder="Selecciona un rol" />
+                <SelectValue placeholder={rolesLoading ? "Cargando roles..." : "Selecciona un rol"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Seleccionar rol</SelectItem>
-                <SelectItem value="ADMIN">Administrador</SelectItem>
-                <SelectItem value="DIGITADOR">Digitador</SelectItem>
-                <SelectItem value="LIDER">Lider</SelectItem>
+                {roles.filter(role => role.isActive).map((role) => (
+                  <SelectItem key={role.id} value={role.name}>
+                    {role.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {errors.role && (
@@ -260,25 +337,66 @@ export function AddUsuarioDialog({
           </div>
 
           {/* Leader */}
-          <div className="space-y-2">
+          <div className="space-y-2 hidden">
             <Label htmlFor="leaderId" className="font-medium">
               Líder (Opcional)
             </Label>
-            <Select value={formData.leaderId || "none"} onValueChange={(value) =>
-              setFormData({ ...formData, leaderId: value === "none" ? "" : value })
-            }>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona un líder" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sin Líder</SelectItem>
-                {leaders.map((leader) => (
-                  <SelectItem key={leader.id} value={leader.id}>
-                    {leader.username}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              type="text"
+              placeholder="Buscar por nombre, teléfono o dirección"
+              value={leaderSearchFilter}
+              onChange={(e) => setLeaderSearchFilter(e.target.value)}
+              className="mb-2"
+              disabled={leadersLoading}
+            />
+            {leadersLoading ? (
+              <p className="text-sm text-muted-foreground">Cargando líderes...</p>
+            ) : leaderSearchFilter ? (
+              <div className="border border-input rounded-md max-h-48 overflow-y-auto bg-background">
+                {filteredLeaders.length > 0 ? (
+                  <div className="space-y-1 p-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, leaderId: "" })
+                        setLeaderSearchFilter("")
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent rounded-sm transition-colors"
+                    >
+                      Sin Líder
+                    </button>
+                    {filteredLeaders.map((leader) => (
+                      <button
+                        key={leader.id}
+                        type="button"
+                        onClick={() => {
+                          setFormData({ ...formData, leaderId: leader.id })
+                          setLeaderSearchFilter(leader.name)
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm rounded-sm transition-colors ${formData.leaderId === leader.id
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent"
+                          }`}
+                      >
+                        <div className="font-medium">{leader.name}</div>
+                        <div className="text-xs opacity-75">{leader.phone} • {leader.address}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground p-3">No se encontraron líderes con ese criterio</p>
+                )}
+              </div>
+            ) : (
+              <div className="border border-input rounded-md p-3 text-sm text-muted-foreground">
+                Escribe para buscar líderes
+              </div>
+            )}
+            {formData.leaderId && (
+              <div className="p-2 bg-accent rounded-md text-sm">
+                <span className="font-medium">Líder seleccionado:</span> {leaders.find(l => l.id === formData.leaderId)?.name}
+              </div>
+            )}
           </div>
 
           {errors.submit && (

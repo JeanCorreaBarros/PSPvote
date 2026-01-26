@@ -6,7 +6,7 @@ import { Header } from "@/components/header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Loader } from "lucide-react"
+import { MapPin } from "lucide-react"
 import { AddPuestoDialog } from "@/components/add-puesto-dialog"
 
 interface Puesto {
@@ -39,7 +39,7 @@ export default function PuestosPage() {
         setLoading(true)
         setError(null)
         const token = localStorage.getItem('pspvote_token')
-        
+
         if (!token) {
           throw new Error('No hay token de autenticación')
         }
@@ -50,11 +50,11 @@ export default function PuestosPage() {
             'Authorization': `Bearer ${token}`,
           },
         })
-        
+
         if (!response.ok) {
           throw new Error('Error al cargar los puestos de votación')
         }
-        
+
         const data = await response.json()
         if (Array.isArray(data)) {
           setPuestos(data)
@@ -113,14 +113,7 @@ export default function PuestosPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              className="flex items-center gap-2"
-            >
-              <Loader className="w-5 h-5 text-primary" />
-              <span className="text-muted-foreground">Cargando puestos...</span>
-            </motion.div>
+            <span className="text-2xl font-bold text-primary">PSPvote</span>
           </div>
         ) : filteredPuestos.length === 0 ? (
           <div className="text-center py-12">

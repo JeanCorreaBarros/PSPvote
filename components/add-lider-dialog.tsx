@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,11 +20,16 @@ interface AddLiderDialogProps {
   onAddLider: (lider: any) => void
 }
 
-export function AddLiderDialog({ open, onOpenChange, onAddLider }: AddLiderDialogProps) {
+export function AddLiderDialog({
+  open,
+  onOpenChange,
+  onAddLider,
+}: AddLiderDialogProps) {
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [lideres, setLideres] = useState<any[]>([])
   const [selectedUserId, setSelectedUserId] = useState("")
   const [selectedRecommendedById, setSelectedRecommendedById] = useState("")
+  const [userSearchTerm, setUserSearchTerm] = useState("")
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
   const [address, setAddress] = useState("")
@@ -32,20 +37,43 @@ export function AddLiderDialog({ open, onOpenChange, onAddLider }: AddLiderDialo
   const [showUserSelect, setShowUserSelect] = useState(false)
   const [showRecommendedSelect, setShowRecommendedSelect] = useState(false)
 
-  const handleOpenChange = async (newOpen: boolean) => {
-    onOpenChange(newOpen)
-    if (newOpen) {
+  // 🔥 Usuarios disponibles (activos y sin líder asignado)
+  const usuariosDisponibles = usuarios.filter(
+    (u) => u.isActive && !u.leader
+  )
+
+  // 🔥 Filtrar usuarios por búsqueda
+  const usuariosFiltrados = usuariosDisponibles.filter((usuario) =>
+    usuario.username.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+    usuario.role?.name?.toLowerCase().includes(userSearchTerm.toLowerCase())
+  )
+
+
+
+  useEffect(() => {
+    const loadLeaders = async () => {
       try {
-        const [usuariosData, lideresData] = await Promise.all([
-          usersApi.getAll(),
-          leadersApi.getAll(),
-        ])
-        setUsuarios(usuariosData)
-        setLideres(lideresData)
+        setIsLoading(true)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/users`)
+        if (!response.ok) {
+          throw new Error("Error al cargar los líderes")
+        }
+        const leadersData = await response.json()
+        setUsuarios(leadersData)
       } catch (error) {
-        console.error("Error cargando datos:", error)
+        console.error("Error al cargar líderes:", error)
+        toast.error("Error al cargar los líderes del sistema")
+      } finally {
+        setIsLoading(false)
       }
-    } else {
+    }
+
+    loadLeaders()
+  }, [])
+
+  const handleOpenChange = (newOpen: boolean) => {
+    onOpenChange(newOpen)
+    if (!newOpen) {
       resetForm()
     }
   }
@@ -53,6 +81,7 @@ export function AddLiderDialog({ open, onOpenChange, onAddLider }: AddLiderDialo
   const resetForm = () => {
     setSelectedUserId("")
     setSelectedRecommendedById("")
+    setUserSearchTerm("")
     setName("")
     setPhone("")
     setAddress("")
@@ -64,14 +93,14 @@ export function AddLiderDialog({ open, onOpenChange, onAddLider }: AddLiderDialo
     e.preventDefault()
 
     if (!name || !phone || !address) {
-      toast.error("Por favor completa los campos requeridos (Nombre, Teléfono, Dirección)", {
-        duration: 4000,
+      toast.error("Completa los campos obligatorios", {
         position: "top-right",
       })
       return
     }
 
     let toastId: string | undefined
+
     try {
       setIsLoading(true)
       toastId = toast.loading("Creando líder...", {
@@ -88,28 +117,23 @@ export function AddLiderDialog({ open, onOpenChange, onAddLider }: AddLiderDialo
 
       toast.success("Líder creado exitosamente", {
         id: toastId,
-        duration: 4000,
       })
 
       onAddLider(newLider)
       resetForm()
       onOpenChange(false)
     } catch (error: any) {
-      const errorMessage = error.message || "Error desconocido"
-      if (toastId) {
-        toast.error(`Error al crear líder: ${errorMessage}`, {
-          id: toastId,
-          duration: 4000,
-        })
-      } else {
-        toast.error(`Error al crear líder: ${errorMessage}`, {
-          duration: 4000,
-        })
-      }
+      toast.error(
+        `Error al crear líder: ${error?.message || "Error desconocido"}`,
+        { id: toastId }
+      )
     } finally {
       setIsLoading(false)
     }
   }
+
+  console.log("usuariosDisponibles", usuariosDisponibles)
+  console.log("selectedUserId", usuarios)
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -117,123 +141,112 @@ export function AddLiderDialog({ open, onOpenChange, onAddLider }: AddLiderDialo
         <DialogHeader>
           <DialogTitle>Crear Nuevo Líder</DialogTitle>
           <DialogDescription>
-            Crea un nuevo líder en el sistema. Completa todos los campos.
+            Completa la información para crear un nuevo líder.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2 hidden">
-            <Label htmlFor="user-select">Usuario (Opcional)</Label>
+          {/* ================= USUARIO ================= */}
+          <div className="space-y-2">
+            <Label>Usuario (Opciondddal)</Label>
+
             <Button
               type="button"
               variant="outline"
               onClick={() => setShowUserSelect(!showUserSelect)}
-              className="w-full justify-start"
+              className="w-full justify-between"
             >
               {selectedUserId
-                ? usuarios.find((u) => u.id === selectedUserId)?.username || "Seleccionar usuario"
-                : "Seleccionar usuario (opcional)"}
+                ? usuarios.find((u) => u.id === selectedUserId)?.username
+                : "Seleccionar usuario"}
             </Button>
+
             {showUserSelect && (
-              <div className="max-h-48 overflow-y-auto border rounded-md p-2 space-y-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedUserId("")
-                    setShowUserSelect(false)
-                  }}
-                  className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
-                >
-                  Sin usuario
-                </button>
-                {usuarios.map((usuario) => (
+              <div className="border rounded-md p-2 bg-background space-y-2">
+                <Input
+                  type="text"
+                  placeholder="Buscar usuario o rol..."
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  className="h-8"
+                  autoFocus
+                />
+                <div className="max-h-48 overflow-y-auto space-y-1">
                   <button
-                    key={usuario.id}
                     type="button"
                     onClick={() => {
-                      setSelectedUserId(usuario.id)
+                      setSelectedUserId("")
                       setShowUserSelect(false)
+                      setUserSearchTerm("")
                     }}
-                    className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                    className="w-full text-left px-3 py-2 rounded text-muted-foreground hover:bg-muted"
                   >
-                    {usuario.username} ({usuario.role?.name || "Sin rol"})
+                    Sin usuario
                   </button>
-                ))}
+
+                  {usuariosFiltrados.map((usuario) => (
+                    <button
+                      key={usuario.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedUserId(usuario.id)
+                        setShowUserSelect(false)
+                        setUserSearchTerm("")
+                      }}
+                      className="w-full text-left px-3 py-2 rounded hover:bg-muted"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {usuario.username}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Rol: {usuario.role?.name}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+
+                  {usuariosFiltrados.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-muted-foreground text-center">
+                      No hay usuarios disponibles
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
+          {/* ================= NOMBRE ================= */}
           <div className="space-y-2">
-            <Label htmlFor="name">Nombre *</Label>
+            <Label>Nombre *</Label>
             <Input
-              id="name"
               placeholder="Nombre del líder"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
 
+          {/* ================= TELÉFONO ================= */}
           <div className="space-y-2">
-            <Label htmlFor="phone">Teléfono *</Label>
+            <Label>Teléfono *</Label>
             <Input
-              id="phone"
               placeholder="Ej: 3001234567"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
           </div>
 
+          {/* ================= DIRECCIÓN ================= */}
           <div className="space-y-2">
-            <Label htmlFor="address">Dirección *</Label>
+            <Label>Dirección *</Label>
             <Input
-              id="address"
               placeholder="Ej: Barrio Centro"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
             />
           </div>
 
-          <div className="space-y-2 hidden">
-            <Label htmlFor="recommended-select">Líder Recomendado por (Opcional)</Label>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowRecommendedSelect(!showRecommendedSelect)}
-              className="w-full justify-start"
-            >
-              {selectedRecommendedById
-                ? lideres.find((l) => l.id === selectedRecommendedById)?.name || "Seleccionar líder"
-                : "Seleccionar líder (opcional)"}
-            </Button>
-            {showRecommendedSelect && (
-              <div className="max-h-48 overflow-y-auto border rounded-md p-2 space-y-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedRecommendedById("")
-                    setShowRecommendedSelect(false)
-                  }}
-                  className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
-                >
-                  Sin recomendante
-                </button>
-                {lideres.map((lider) => (
-                  <button
-                    key={lider.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedRecommendedById(lider.id)
-                      setShowRecommendedSelect(false)
-                    }}
-                    className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    {lider.name} ({lider.phone})
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
+          {/* ================= BOTONES ================= */}
           <div className="flex justify-end gap-2 pt-4">
             <Button
               type="button"

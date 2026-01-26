@@ -10,6 +10,7 @@ import { DescargarReporte } from "@/components/descargar-reporte"
 import { ReportePreview } from "@/components/reporte-preview"
 import { EstadisticasSkeleton, ReportCardSkeleton } from "@/components/reportes-skeleton"
 import { reportesApi } from "@/lib/api"
+import { reportesTour } from "@/lib/tours-config"
 
 interface Reporte {
   id: number
@@ -22,8 +23,11 @@ interface Reporte {
 const reportes: Reporte[] = [
   { id: 1, nombre: "Resumen General de Votación", descripcion: "Estadísticas generales de participación electoral", icon: PieChart, tipo: "PDF" },
   { id: 2, nombre: "Registro por Puestos", descripcion: "Detalle de votantes por cada puesto de votación", icon: BarChart3, tipo: "Excel" },
-  { id: 3, nombre: "Análisis de Participación", descripcion: "Tendencias y análisis de participación por zona", icon: TrendingUp, tipo: "PDF" },
-  { id: 4, nombre: "Listado de Votantes", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+
+  { id: 3, nombre: "Gráficos por Lider", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+  { id: 4, nombre: "Gráficos por Zona", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+  { id: 5, nombre: "Gráficos por Puesto", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+  { id: 6, nombre: "Gráficos por Programa", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
 ]
 
 interface Estadisticas {
@@ -84,35 +88,37 @@ export default function ReportesPage() {
 
   return (
     <div className="min-h-screen">
-      <Header title="Reportes" />
+      <Header title="Reportes" tours={[{ name: "Guía de Reportes", steps: reportesTour }]} />
 
       <div className="p-6">
         <div className="mb-6 flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">Generar Reportes</h2>
+            <h2 id="reportes-titulo" className="text-lg font-semibold text-foreground">Generar Reportes</h2>
             <p className="text-sm text-muted-foreground">Descarga reportes y estadísticas del sistema</p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              setLoading(true)
-              try {
-                await new Promise((resolve) => setTimeout(resolve, 1000))
-                setEstadisticas(defaultEstadisticas)
-                console.log("Estadísticas actualizadas")
-              } catch (err) {
-                setError("Error al actualizar estadísticas")
-              } finally {
-                setLoading(false)
-              }
-            }}
-            disabled={loading}
-            className="gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Actualizando..." : "Actualizar"}
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setLoading(true)
+                try {
+                  await new Promise((resolve) => setTimeout(resolve, 1000))
+                  setEstadisticas(defaultEstadisticas)
+                  console.log("Estadísticas actualizadas")
+                } catch (err) {
+                  setError("Error al actualizar estadísticas")
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              disabled={loading}
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Actualizando..." : "Actualizar"}
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -124,7 +130,29 @@ export default function ReportesPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
+          className=" hidden grid-cols-1 md:grid-cols-2 gap-4 mb-6"
+          id="estadisticas-cards"
+        >
+          {[
+            { label: "Total Registros", value: estadisticas.totalRegistros, color: "bg-blue-50" },
+            { label: "Verificados", value: estadisticas.verificados, color: "bg-green-50" },
+            { label: "Pendientes", value: estadisticas.pendientes, color: "bg-yellow-50" },
+            { label: "Rechazados", value: estadisticas.rechazados, color: "bg-red-50" },
+          ].map((stat, index) => (
+            <Card key={index} className={`border-border ${stat.color}`}>
+              <CardContent className="p-5">
+                <p className="text-sm text-muted-foreground">{stat.label}</p>
+                <p className="text-2xl font-bold text-foreground mt-2">{stat.value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          id="reportes-list"
         >
           {loading ? (
             <>
@@ -140,6 +168,7 @@ export default function ReportesPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
+                id="reporte-card"
               >
                 <Card className="border-border hover:shadow-md transition-shadow">
                   <CardContent className="p-5">
@@ -167,7 +196,7 @@ export default function ReportesPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="mt-8"
+          className="mt-8 hidden"
         >
           <Card className="border-border">
             <CardHeader>

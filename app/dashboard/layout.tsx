@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Sidebar } from "@/components/sidebar"
 import { BottomNav } from "@/components/bottom-nav"
+import { SidebarTourTrigger } from "@/components/sidebar-tour-trigger"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { getUser, getRoleFromToken } from "@/lib/auth"
 
@@ -48,6 +49,7 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-background">
+      <SidebarTourTrigger />
       {!isMobile && <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed(!isCollapsed)} />}
       <BottomNav />
       <motion.main

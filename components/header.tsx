@@ -17,12 +17,20 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { getUser, logout, type User as UserType } from "@/lib/auth"
 import { useRouter } from "next/navigation"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { HelpButton } from "@/components/help-button"
+import { TourStep } from "@/hooks/use-driver-tour"
+
+interface TourGuide {
+  name: string
+  steps: TourStep[]
+}
 
 interface HeaderProps {
   title: string
+  tours?: TourGuide[]
 }
 
-export function Header({ title }: HeaderProps) {
+export function Header({ title, tours }: HeaderProps) {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [user, setUser] = useState<UserType | null>(null)
@@ -55,11 +63,9 @@ export function Header({ title }: HeaderProps) {
           />
         </div>
 
-        {/* Notifications */}
-        {/*<Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5 text-muted-foreground" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
-        </Button>*/}
+        {/* Help Button */}
+        {tours && tours.length > 0 && <HelpButton tours={tours} />}
+
 
         {/* User Menu */}
         <DropdownMenu>
