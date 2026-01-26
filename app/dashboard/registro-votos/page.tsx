@@ -1459,6 +1459,7 @@ export default function RegistroVotosPage() {
                                         </SelectContent>
                                       </Select>
                                     </td>
+                                    
                                     <td className="px-2 py-2 overflow-hidden">
                                       <Select
                                         value={formData.programaLabel}
@@ -1579,10 +1580,9 @@ export default function RegistroVotosPage() {
                             </div>
                           </form>
                         ) : (
-                          <form onSubmit={handleSubmitRows} className="p-6 space-y-4">
-                            {/* Tabla de Votantes - Modo Creación */}
+                          <form onSubmit={handleSubmitRows} className="p-6 space-y-4 flex flex-col h-full">
                             {/* Tabla horizontal */}
-                            <div className="overflow-x-auto border border-border rounded-lg">
+                            <div className="overflow-x-auto border border-border rounded-lg flex-1 overflow-y-auto max-h-[300px]">
                               <table className="w-full text-sm table-fixed">
                                 <colgroup>
                                   <col className="w-[120px]" />
@@ -1728,7 +1728,7 @@ export default function RegistroVotosPage() {
                                             <button
                                               type="button"
                                               onClick={() => deleteRow(row.id)}
-                                              className="text-muted-foreground hover:text-red-600"
+                                              className="text-muted-foreground cursor-pointer  hover:text-red-600"
                                               title="Eliminar"
                                             >
                                               <Trash2 className="w-4 h-4" />
@@ -1744,7 +1744,7 @@ export default function RegistroVotosPage() {
 
                             {/* Mostrar errores debajo de la tabla */}
                             {votanteRows.some(r => r.error) && (
-                              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <div className="p-3 bg-red-50 border border-red-200 rounded-lg mt-4">
                                 <p className="text-sm font-semibold text-red-700 mb-2">Errores encontrados:</p>
                                 {votanteRows.map((row) => row.error && (
                                   <div key={row.id} className="text-xs text-red-600 mb-1">
@@ -1755,13 +1755,13 @@ export default function RegistroVotosPage() {
                             )}
 
                             {/* Botón para agregar fila */}
-                            <div className="flex justify-between items-center pt-2">
+                            <div className="flex justify-between items-center pt-4 border-t border-border mt-4">
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 onClick={addNewRow}
-                                className="gap-2"
+                                className="gap-2 cursor-pointer"
                               >
                                 <Plus className="w-4 h-4" />
                                 Agregar Fila
@@ -1772,6 +1772,7 @@ export default function RegistroVotosPage() {
                                 <Button
                                   type="button"
                                   variant="outline"
+                                  className="cursor-pointer "
                                   onClick={() => {
                                     if (!hasUnsavedChanges()) {
                                       resetForm()
@@ -1786,7 +1787,7 @@ export default function RegistroVotosPage() {
                                 <Button
                                   id="form-submit"
                                   type="submit"
-                                  className="bg-primary text-primary-foreground"
+                                  className="bg-primary  cursor-pointer  text-primary-foreground"
                                   disabled={loading}
                                 >
                                   {loading ? "Registrando..." : "Registrar Todo"}
