@@ -530,10 +530,10 @@ export default function RegistroVotosPage() {
 
       // Validar todos los registros
       for (const row of votanteRows) {
-        if (!row.nombre1 || !row.apellido1 || !row.cedula || !row.telefono || !row.direccion || !row.barrio || !row.puestoVotacion || !row.programaId) {
+        if (!row.nombre1 || !row.apellido1 || !row.cedula || !row.telefono || !row.direccion || !row.barrio || !row.puestoVotacion || !row.programaId || !row.leaderId) {
           updatedRows.push({
             ...row,
-            error: 'Campos incompletos'
+            error: !row.leaderId ? 'Debe asignar un Líder' : 'Campos incompletos'
           })
           failedCount++
         }
@@ -609,6 +609,12 @@ export default function RegistroVotosPage() {
     // Validación básica
     if (!formData.nombre1 || !formData.apellido1 || !formData.cedula || !formData.puestoVotacion) {
       toast.error('Por favor completa los campos requeridos')
+      return
+    }
+
+    // Validar que el Líder esté asignado
+    if (!formData.leaderId) {
+      toast.error('⚠️ Debe asignar un Líder para continuar')
       return
     }
 
