@@ -1827,8 +1827,8 @@ export default function RegistroVotosPage() {
                   <TableRow id="registro-tabla-header" className="border-border hover:bg-transparent">
                     <TableHead className="w-12"></TableHead>
                     <TableHead className="text-muted-foreground font-medium max-w-32 truncate">ID</TableHead>
-                    {userRole === "ADMIN" && (
-                      <TableHead className="text-muted-foreground font-medium">Creado Por</TableHead>
+                    {(userRole === "ADMIN" || userRole === "LIDER") && (
+                      <TableHead className="text-muted-foreground font-medium">{userRole === "ADMIN" ? "Creado Por" : "Líder Asignado"}</TableHead>
                     )}
                     <TableHead className="text-muted-foreground font-medium">Votante</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Cédula</TableHead>
@@ -1857,7 +1857,7 @@ export default function RegistroVotosPage() {
                           <input type="checkbox" className="rounded border-border ml-5" />
                         </TableCell>
                         <TableCell className={`font-medium max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`} title={votante.id}>{votante.idnumber}</TableCell>
-                        {userRole === "ADMIN" && (
+                        {(userRole === "ADMIN" || userRole === "LIDER") && (
                           <TableCell className={`font-medium max-w-32 truncate text-sm ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`} title={votante.creadoPor}>{votante.creadoPor}</TableCell>
                         )}
                         <TableCell id="tabla-avatar">
