@@ -167,6 +167,16 @@ export default function RegistroVotosPage() {
   const [toggleStatusId, setToggleStatusId] = useState<string | null>(null)
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
   const [observation, setObservation] = useState("")
+  const [showPuestosModal, setShowPuestosModal] = useState(false)
+  const [searchPuestosModal, setSearchPuestosModal] = useState("")
+  const [selectedPuestoModal, setSelectedPuestoModal] = useState<string | null>(null)
+  const [currentEditingField, setCurrentEditingField] = useState<'form' | 'row' | null>(null)
+  const [currentRowId, setCurrentRowId] = useState<string | null>(null)
+  const [showProgramasModal, setShowProgramasModal] = useState(false)
+  const [searchProgramasModal, setSearchProgramasModal] = useState("")
+  const [selectedProgramaModal, setSelectedProgramaModal] = useState<string | null>(null)
+  const [currentEditingFieldPrograma, setCurrentEditingFieldPrograma] = useState<'form' | 'row' | null>(null)
+  const [currentRowIdPrograma, setCurrentRowIdPrograma] = useState<string | null>(null)
 
   // Hook para el tour automático del modal
   useRegistrarVotanteTour(isDialogOpen && !editingVotante)
@@ -1452,48 +1462,35 @@ export default function RegistroVotosPage() {
                                       />
                                     </td>
                                     <td className="px-2 py-2 overflow-hidden">
-                                      <Select value={formData.puestoVotacion} onValueChange={(value) => setFormData({ ...formData, puestoVotacion: value })}>
-                                        <SelectTrigger className="h-8 text-xs w-full max-w-[130px]">
-                                          <SelectValue placeholder="Sel." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {puestosVotacion.map((puesto) => (
-                                            <SelectItem key={puesto.id} value={puesto.id}>
-                                              {puesto.puesto}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCurrentEditingField('form')
+                                          setCurrentRowId(null)
+                                          setSearchPuestosModal("")
+                                          setSelectedPuestoModal(formData.puestoVotacion)
+                                          setShowPuestosModal(true)
+                                        }}
+                                        className="h-8 text-xs w-full max-w-[130px] px-2 py-1 border border-input rounded-md bg-background hover:bg-muted/50 text-left truncate"
+                                      >
+                                        {puestosVotacion.find(p => p.id === formData.puestoVotacion)?.puesto || 'Sel.'}
+                                      </button>
                                     </td>
                                     
                                     <td className="px-2 py-2 overflow-hidden">
-                                      <Select
-                                        value={formData.programaLabel}
-                                        onValueChange={(value) => {
-                                          const prog = programasOpciones.find(p => p.label === value)
-                                          if (prog) {
-                                            setFormData({
-                                              ...formData,
-                                              programaId: prog.programaId,
-                                              programaLabel: prog.label,
-                                              sedeId: prog.sedeId || null,
-                                              tipoVinculacionId: prog.tipoVinculacionId,
-                                              esPago: prog.esPago,
-                                            })
-                                          }
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCurrentEditingFieldPrograma('form')
+                                          setCurrentRowIdPrograma(null)
+                                          setSearchProgramasModal("")
+                                          setSelectedProgramaModal(formData.programaLabel)
+                                          setShowProgramasModal(true)
                                         }}
+                                        className="h-8 text-xs w-full max-w-[140px] px-2 py-1 border border-input rounded-md bg-background hover:bg-muted/50 text-left truncate"
                                       >
-                                        <SelectTrigger className="h-8 text-xs w-full max-w-[140px]">
-                                          <SelectValue placeholder="Sel." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {programasOpciones.map((prog) => (
-                                            <SelectItem key={prog.label} value={prog.label}>
-                                              {prog.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                        {programasOpciones.find(p => p.label === formData.programaLabel)?.label || 'Sel.'}
+                                      </button>
                                     </td>
                                   </tr>
                                 </tbody>
@@ -1687,48 +1684,38 @@ export default function RegistroVotosPage() {
                                             />
                                           </td>
                                           <td className="px-2 py-2 overflow-hidden">
-                                            <Select value={row.puestoVotacion} onValueChange={(value) => updateRow(row.id, { puestoVotacion: value })}>
-                                              <SelectTrigger className={`h-8 text-xs w-full max-w-[130px] ${row.error ? 'border-red-400' : ''
-                                                }`}>
-                                                <SelectValue placeholder="Sel." />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                {puestosVotacion.map((puesto) => (
-                                                  <SelectItem key={puesto.id} value={puesto.id}>
-                                                    {puesto.puesto}
-                                                  </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setCurrentEditingField('row')
+                                                setCurrentRowId(row.id)
+                                                setSearchPuestosModal("")
+                                                setSelectedPuestoModal(row.puestoVotacion)
+                                                setShowPuestosModal(true)
+                                              }}
+                                              className={`h-8 text-xs w-full max-w-[130px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${
+                                                row.error ? 'border-red-400' : 'border-input'
+                                              }`}
+                                            >
+                                              {puestosVotacion.find(p => p.id === row.puestoVotacion)?.puesto || 'Sel.'}
+                                            </button>
                                           </td>
                                           <td className="px-2 py-2 overflow-hidden">
-                                            <Select
-                                              value={row.programaLabel || ""}
-                                              onValueChange={(value) => {
-                                                const prog = programasOpciones.find(p => p.label === value)
-                                                if (prog) {
-                                                  updateRow(row.id, {
-                                                    programaId: prog.programaId,
-                                                    programaLabel: prog.label,
-                                                    sedeId: prog.sedeId || null,
-                                                    tipoVinculacionId: prog.tipoVinculacionId,
-                                                    esPago: prog.esPago,
-                                                  })
-                                                }
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setCurrentEditingFieldPrograma('row')
+                                                setCurrentRowIdPrograma(row.id)
+                                                setSearchProgramasModal("")
+                                                setSelectedProgramaModal(row.programaLabel)
+                                                setShowProgramasModal(true)
                                               }}
+                                              className={`h-8 text-xs w-full max-w-[140px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${
+                                                row.error ? 'border-red-400' : 'border-input'
+                                              }`}
                                             >
-                                              <SelectTrigger className={`h-8 text-xs w-full max-w-[140px] ${row.error ? 'border-red-400' : ''
-                                                }`}>
-                                                <SelectValue placeholder="Sel." />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                {programasOpciones.map((prog) => (
-                                                  <SelectItem key={prog.label} value={prog.label}>
-                                                    {prog.label}
-                                                  </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
+                                              {programasOpciones.find(p => p.label === row.programaLabel)?.label || 'Sel.'}
+                                            </button>
                                           </td>
                                           <td className="px-2 py-2 text-center overflow-hidden">
                                             <button
@@ -2062,6 +2049,193 @@ export default function RegistroVotosPage() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de búsqueda de puestos de votación */}
+      {showPuestosModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg w-full max-w-md p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-foreground">
+                Seleccionar Puesto de Votación
+              </h2>
+              <button
+                onClick={() => setShowPuestosModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Búsqueda */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar puesto..."
+                  value={searchPuestosModal}
+                  onChange={(e) => setSearchPuestosModal(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-input rounded-md bg-background text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            {/* Lista de puestos */}
+            <div className="max-h-96 overflow-y-auto border border-border rounded-md">
+              {puestosVotacion
+                .filter(puesto =>
+                  puesto.puesto.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                  puesto.municipio.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                  puesto.direccion.toLowerCase().includes(searchPuestosModal.toLowerCase())
+                )
+                .length > 0 ? (
+                puestosVotacion
+                  .filter(puesto =>
+                    puesto.puesto.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                    puesto.municipio.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                    puesto.direccion.toLowerCase().includes(searchPuestosModal.toLowerCase())
+                  )
+                  .map((puesto) => (
+                    <button
+                      key={puesto.id}
+                      type="button"
+                      onClick={() => {
+                        if (currentEditingField === 'form') {
+                          setFormData({ ...formData, puestoVotacion: puesto.id })
+                        } else if (currentEditingField === 'row' && currentRowId) {
+                          updateRow(currentRowId, { puestoVotacion: puesto.id })
+                        }
+                        setShowPuestosModal(false)
+                      }}
+                      className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent transition-colors last:border-b-0 ${selectedPuestoModal === puesto.id ? 'bg-primary/10' : ''}`}
+                    >
+                      <div className="font-medium text-sm text-foreground">
+                        {puesto.puesto}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {puesto.municipio} • {puesto.direccion}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Total: {puesto.total} ({puesto.mesas} mesas)
+                      </div>
+                    </button>
+                  ))
+              ) : (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No se encontraron puestos de votación
+                </div>
+              )}
+            </div>
+
+            {/* Botones */}
+            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPuestosModal(false)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de búsqueda de programas */}
+      {showProgramasModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg w-full max-w-md p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-foreground">
+                Seleccionar Programa
+              </h2>
+              <button
+                onClick={() => setShowProgramasModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Búsqueda */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar programa..."
+                  value={searchProgramasModal}
+                  onChange={(e) => setSearchProgramasModal(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-input rounded-md bg-background text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            {/* Lista de programas */}
+            <div className="max-h-96 overflow-y-auto border border-border rounded-md">
+              {programasOpciones
+                .filter(prog =>
+                  prog.label.toLowerCase().includes(searchProgramasModal.toLowerCase())
+                )
+                .length > 0 ? (
+                programasOpciones
+                  .filter(prog =>
+                    prog.label.toLowerCase().includes(searchProgramasModal.toLowerCase())
+                  )
+                  .map((prog) => (
+                    <button
+                      key={prog.label}
+                      type="button"
+                      onClick={() => {
+                        if (currentEditingFieldPrograma === 'form') {
+                          setFormData({
+                            ...formData,
+                            programaId: prog.programaId,
+                            programaLabel: prog.label,
+                            sedeId: prog.sedeId || null,
+                            tipoVinculacionId: prog.tipoVinculacionId,
+                            esPago: prog.esPago,
+                          })
+                        } else if (currentEditingFieldPrograma === 'row' && currentRowIdPrograma) {
+                          updateRow(currentRowIdPrograma, {
+                            programaId: prog.programaId,
+                            programaLabel: prog.label,
+                            sedeId: prog.sedeId || null,
+                            tipoVinculacionId: prog.tipoVinculacionId,
+                            esPago: prog.esPago,
+                          })
+                        }
+                        setShowProgramasModal(false)
+                      }}
+                      className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent transition-colors last:border-b-0 ${selectedProgramaModal === prog.label ? 'bg-primary/10' : ''}`}
+                    >
+                      <div className="font-medium text-sm text-foreground">
+                        {prog.label}
+                      </div>
+                    </button>
+                  ))
+              ) : (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No se encontraron programas
+                </div>
+              )}
+            </div>
+
+            {/* Botones */}
+            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowProgramasModal(false)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
