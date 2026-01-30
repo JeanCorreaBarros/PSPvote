@@ -5,29 +5,47 @@ import { motion } from "framer-motion"
 import { Header } from "@/components/header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, FileText, PieChart, BarChart3, TrendingUp, RefreshCw } from "lucide-react"
+import { Download, FileText, PieChart, BarChart3, TrendingUp, RefreshCw, FileSpreadsheet } from "lucide-react"
 import { DescargarReporte } from "@/components/descargar-reporte"
-import { ReportePreview } from "@/components/reporte-preview"
 import { EstadisticasSkeleton, ReportCardSkeleton } from "@/components/reportes-skeleton"
 import { reportesApi } from "@/lib/api"
 import { reportesTour } from "@/lib/tours-config"
+
+interface DescargarOpciones {
+  tipo: "PDF" | "Excel" | "ZIP"
+  label: string
+  endpoint?: string
+}
 
 interface Reporte {
   id: number
   nombre: string
   descripcion: string
   icon: any
-  tipo: string
+  descargas: DescargarOpciones[]
 }
 
 const reportes: Reporte[] = [
-  { id: 1, nombre: "Resumen General de Votación", descripcion: "Estadísticas generales de participación electoral", icon: PieChart, tipo: "PDF" },
-  { id: 2, nombre: "Registro por Puestos", descripcion: "Detalle de votantes por cada puesto de votación", icon: BarChart3, tipo: "Excel" },
-
-  { id: 3, nombre: "Gráficos por Lider", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
-  { id: 4, nombre: "Gráficos por Zona", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
-  { id: 5, nombre: "Gráficos por Puesto", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
-  { id: 6, nombre: "Gráficos por Programa", descripcion: "Listado completo de votantes registrados", icon: FileText, tipo: "Excel" },
+  { id: 1, nombre: "Resumen General de Votación", descripcion: "Estadísticas generales de participación electoral", icon: PieChart, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfgeneral?formato=oficio" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelgeneral" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipgeneral?formato=oficio" }
+    ] },
+  { id: 2, nombre: "Registro por Puestos", descripcion: "Detalle de votantes por cada puesto de votación", icon: BarChart3, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfporpuesto?formato=oficio" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelporpuesto" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipporpuesto?formato=oficio" }
+    ] },
+  { id: 3, nombre: "Registro por Lider", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdf?formato=oficio" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcel" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdf?formato=oficio" }
+    ] },
+  { id: 4, nombre: "Registro por Programa", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfporprograma?formato=oficio" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelporprograma" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipporprograma?formato=oficio" }
+    ] },
 ]
 
 interface Estadisticas {
@@ -68,19 +86,63 @@ export default function ReportesPage() {
     fetchEstadisticas()
   }, [])
 
-  const handleDescargar = async (tipo: string) => {
+  const handleDescargar = async (reporteId: number, tipo: string, endpoint?: string) => {
     try {
       setLoading(true)
-      if (tipo === "PDF") {
-        // Descomenta cuando el endpoint esté listo
-        // await reportesApi.exportarPDF()
-      } else {
-        // Descomenta cuando el endpoint esté listo
-        // await reportesApi.exportarCSV()
+      setError(null)
+      
+      const token = localStorage.getItem('pspvote_token')
+      
+      if (!token) {
+        setError("No autorizado. Por favor inicia sesión nuevamente.")
+        return
       }
-      console.log(`Descargando ${tipo}...`)
+      
+      if (!endpoint) {
+        setError("Endpoint no configurado para este reporte.")
+        return
+      }
+      
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      const fullUrl = `${apiBaseUrl}${endpoint}`
+      
+      console.log(`Consumiendo endpoint: ${fullUrl}`)
+      
+      const response = await fetch(fullUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status} ${response.statusText}`)
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+
+      let fileExtension = 'bin'
+      if (tipo === "PDF") fileExtension = 'pdf'
+      else if (tipo === "Excel") fileExtension = 'xlsx'
+      else if (tipo === "ZIP") fileExtension = 'zip'
+
+      const fileName = `reporte_${reporteId}_${new Date().toLocaleDateString("es-ES").replace(/\//g, "-")}.${fileExtension}`
+
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      console.log(`Reporte descargado: ${fileName}`)
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : `Error al descargar ${tipo}`)
+      console.error("Error al descargar:", err)
     } finally {
       setLoading(false)
     }
@@ -179,9 +241,31 @@ export default function ReportesPage() {
                       <div className="flex-1">
                         <h3 className="font-semibold text-foreground">{reporte.nombre}</h3>
                         <p className="text-sm text-muted-foreground mt-1">{reporte.descripcion}</p>
-                        <div className="flex items-center gap-3 mt-4">
-                          <DescargarReporte reporte={reporte} />
-                          <ReportePreview reporte={reporte} />
+                        <div className="flex items-center gap-3 mt-4 flex-wrap">
+                          {reporte.descargas.map((descarga, idx) => (
+                            <Button
+                              key={idx}
+                              size="sm"
+                              className={`gap-2 text-white ${
+                                descarga.tipo === "PDF"
+                                  ? "bg-red-600 hover:bg-red-700"
+                                  : descarga.tipo === "Excel"
+                                  ? "bg-green-600 hover:bg-green-700"
+                                  : "bg-violet-600 hover:bg-violet-700"
+                              }`}
+                              onClick={() => handleDescargar(reporte.id, descarga.tipo, descarga.endpoint)}
+                              disabled={loading}
+                            >
+                              {descarga.tipo === "PDF" ? (
+                                <Download className="w-4 h-4" />
+                              ) : descarga.tipo === "Excel" ? (
+                                <FileSpreadsheet className="w-4 h-4" />
+                              ) : (
+                                <Download className="w-4 h-4" />
+                              )}
+                              {descarga.label}
+                            </Button>
+                          ))}
                         </div>
                       </div>
                     </div>

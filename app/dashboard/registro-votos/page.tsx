@@ -132,6 +132,20 @@ const getAvailableTabs = (role: string | null) => {
   return ["Todos", "Digitador", "Líder", "Recomendado"]
 }
 
+// Función para traducir errores de Prisma
+const translatePrismaError = (errorMessage: string): string => {
+  if (errorMessage.includes('Unique constraint failed on the constraint: `Votacion_cedula_leaderId_key`')) {
+    return 'Esta cédula ya está registrada para este Líder. No se puede registrar la misma cédula dos veces con el mismo líder'
+  }
+  if (errorMessage.includes('Unique constraint failed')) {
+    return 'Este registro ya existe. Verifique que los datos sean únicos'
+  }
+  if (errorMessage.includes('Foreign key constraint failed')) {
+    return 'No se encontró uno de los registros relacionados. Verifique los datos'
+  }
+  return errorMessage
+}
+
 const Loading = () => null
 
 export default function RegistroVotosPage() {
@@ -177,6 +191,11 @@ export default function RegistroVotosPage() {
   const [selectedProgramaModal, setSelectedProgramaModal] = useState<string | null>(null)
   const [currentEditingFieldPrograma, setCurrentEditingFieldPrograma] = useState<'form' | 'row' | null>(null)
   const [currentRowIdPrograma, setCurrentRowIdPrograma] = useState<string | null>(null)
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [duplicateVotanteData, setDuplicateVotanteData] = useState<any>(null)
+  const [duplicateCedula, setDuplicateCedula] = useState<string>("")
+  const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null)
+  const [validatingCedula, setValidatingCedula] = useState(false)
 
   // Hook para el tour automático del modal
   useRegistrarVotanteTour(isDialogOpen && !editingVotante)
@@ -511,6 +530,81 @@ export default function RegistroVotosPage() {
     }])
   }
 
+  // Función para validar cédulas duplicadas
+  const validateCedula = async (cedula: string, rowId?: string) => {
+    if (!cedula.trim()) {
+      return
+    }
+
+    try {
+      setValidatingCedula(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/cedula/${cedula}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (response.ok) {
+        // La API puede devolver dos formas:
+        // 1) Un objeto con { votacion: {...} } cuando hay un registro existente
+        // 2) Un objeto con { message: 'Votación disponible para digitar', votacion: null } cuando está disponible para digitar
+        const data = await response.json()
+
+        // Si la API indica que la votación está disponible para digitar, permitir continuar (no abrir modal)
+        if ((data && data.votacion === null) && typeof data.message === 'string' && data.message.toLowerCase().includes('disponible')) {
+          // Limpiar cualquier estado de duplicado y permitir creación
+          if (rowId) {
+            setVotanteRows(votanteRows.map(row =>
+              row.id === rowId ? { ...row, error: undefined } : row
+            ))
+          }
+          setShowDuplicateModal(false)
+          setDuplicateMessage(null)
+          setDuplicateVotanteData(null)
+        } else {
+          // La cédula existe - mostrar modal de duplicado
+          setDuplicateCedula(cedula)
+          setDuplicateVotanteData(data)
+          setDuplicateMessage(null)
+          console.log('Cédula duplicada encontrada:', data)
+          setShowDuplicateModal(true)
+
+          // Marcar la fila en rojo si se especificó un rowId
+          if (rowId) {
+            setVotanteRows(votanteRows.map(row =>
+              row.id === rowId ? { ...row, error: 'Cédula Registrada' } : row
+            ))
+          }
+        }
+      } else if (response.status === 404) {
+        // La cédula no existe - permitir continuar
+        if (rowId) {
+          setVotanteRows(votanteRows.map(row =>
+            row.id === rowId ? { ...row, error: undefined } : row
+          ))
+        }
+        setShowDuplicateModal(false)
+        setDuplicateMessage(null)
+        setDuplicateVotanteData(null)
+      }
+    } catch (err) {
+      console.error('Error validando cédula:', err)
+      // En caso de error, permitir continuar
+    } finally {
+      setValidatingCedula(false)
+    }
+  }
+
   const updateRow = (id: string, updates: Partial<VotanteRowType>) => {
     setVotanteRows(votanteRows.map(row =>
       row.id === id ? { ...row, ...updates, error: undefined } : row
@@ -593,7 +687,21 @@ export default function RegistroVotosPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || 'Error al registrar votantes')
+        // Si la API devuelve la votación existente, mostrar modal de duplicado
+        if (errorData && errorData.votacion) {
+          setDuplicateCedula(errorData.votacion.cedula || (votantesParaEnviar && votantesParaEnviar[0]?.cedula) || '')
+          setDuplicateVotanteData(errorData.votacion)
+          setDuplicateMessage(errorData.message || null)
+          // marcar la fila relacionada con el mensaje si corresponde
+          if (errorData.message) {
+            setVotanteRows(prev => prev.map(row => ({ ...row, error: row.cedula === (errorData.votacion?.cedula) ? errorData.message : row.error })))
+          }
+          setShowDuplicateModal(true)
+          setLoading(false)
+          return
+        }
+        const errorMessage = errorData.message || errorData.error || 'Error al registrar votantes'
+        throw new Error(translatePrismaError(errorMessage))
       }
 
       const result = await response.json()
@@ -692,7 +800,8 @@ export default function RegistroVotosPage() {
           if (response.status === 401 || errorData.error === 'No autorizado') {
             throw new Error('El usuario no está autorizado para esta función')
           }
-          throw new Error(errorData.message || 'Error al actualizar el votante')
+          const errorMessage = errorData.message || errorData.error || 'Error al actualizar el votante'
+          throw new Error(translatePrismaError(errorMessage))
         }
 
         // Recargar la lista de votantes desde la API
@@ -736,7 +845,22 @@ export default function RegistroVotosPage() {
           if (response.status === 401 || errorData.error === 'No autorizado') {
             throw new Error('El usuario no está autorizado para esta función')
           }
-          throw new Error(errorData.message || 'Error al registrar el votante')
+          // Si la API devuelve la votación existente, mostrar modal de duplicado
+          if (errorData && errorData.votacion) {
+            setDuplicateCedula(errorData.votacion.cedula || formData.cedula)
+            setDuplicateVotanteData(errorData.votacion)
+            setDuplicateMessage(errorData.message || null)
+            // Si la API envía un mensaje específico, marcar el formulario o la fila con el mensaje
+            if (errorData.message) {
+              // Para edición individual, añadimos message al campo error del row si existe
+              setVotanteRows(prev => prev.map(row => ({ ...row, error: row.cedula === (errorData.votacion?.cedula) ? errorData.message : row.error })))
+            }
+            setShowDuplicateModal(true)
+            setLoading(false)
+            return
+          }
+          const errorMessage = errorData.message || errorData.error || 'Error al registrar el votante'
+          throw new Error(translatePrismaError(errorMessage))
         }
 
         const nuevoVotante = await response.json()
@@ -1649,6 +1773,12 @@ export default function RegistroVotosPage() {
                                               placeholder="Cédula"
                                               value={row.cedula}
                                               onChange={(e) => updateRow(row.id, { cedula: e.target.value })}
+                                              onBlur={(e) => {
+                                                const cedula = e.target.value.trim()
+                                                if (cedula) {
+                                                  validateCedula(cedula, row.id)
+                                                }
+                                              }}
                                               className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
                                                 }`}
                                             />
@@ -2231,6 +2361,80 @@ export default function RegistroVotosPage() {
                 onClick={() => setShowProgramasModal(false)}
               >
                 Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cédula duplicada */}
+      {showDuplicateModal && duplicateVotanteData && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg max-w-md w-full p-6 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <X className="w-6 h-6 text-red-600" />
+              </div>
+              <h2 className="text-lg font-semibold text-foreground">Ya se encuentra registrada</h2>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-4">
+              {duplicateMessage ? (
+                <span className="font-semibold text-foreground">{duplicateMessage}</span>
+              ) : (
+                <>La cédula <span className="font-semibold text-foreground">{duplicateCedula}</span> ya se encuentra registrada en el sistema.</>
+              )}
+            </p>
+
+            <div className="bg-muted/50 rounded-lg p-4 mb-4 space-y-2 border border-border">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Nombre Registrado:</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.nombre1} {(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.apellido1}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Teléfono:</p>
+                <p className="text-sm text-foreground">{(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.telefono}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Dirección:</p>
+                <p className="text-sm text-foreground">{(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.direccion}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Barrio:</p>
+                <p className="text-sm text-foreground">{(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.barrio}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Puesto de Votación:</p>
+                <p className="text-sm text-foreground">
+                  {puestosVotacion.find(p => p.id === (duplicateVotanteData?.votacion ?? duplicateVotanteData)?.puestoVotacion)?.puesto || 'No especificado'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Fecha de Registro:</p>
+                <p className="text-sm text-foreground">
+                  {new Date((duplicateVotanteData?.votacion ?? duplicateVotanteData)?.createdAt).toLocaleDateString("es-CO")}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground mb-6">
+              Si cree que esto es un error, contacte con el administrador del sistema.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                className="bg-primary text-primary-foreground"
+                onClick={() => {
+                  setShowDuplicateModal(false)
+                  setDuplicateVotanteData(null)
+                  setDuplicateCedula("")
+                  setDuplicateMessage(null)
+                }}
+              >
+                Entendido
               </Button>
             </div>
           </div>
