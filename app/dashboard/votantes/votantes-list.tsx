@@ -2,30 +2,42 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Mail, Phone, MapPin } from "lucide-react"
-import { votantesApi } from "@/lib/api"
+import { Button } from "@/components/ui/button"
+import { CheckCircle2, Shield, Eye } from "lucide-react"
+import { CertificateVerificationDialog } from "@/components/certificate-verification-dialog"
+import { CertificationDetailsDialog } from "@/components/certification-details-dialog"
+import { useToast } from "@/hooks/use-toast"
+import { getRoleFromToken, getUser, getToken } from "@/lib/auth"
 
 interface Votante {
-  id: number
+  id: string
   nombre: string
   cedula: string
-  email: string
   telefono: string
   direccion: string
-  estado: string
+  barrio: string
+  puestoVotacionNombre: string
+  planilla: number
+  leader?: {
+    name: string
+  }
+  esPago: boolean
+  isActive: boolean
+  isDuplicate: boolean
+  certificado?: boolean
+  confirmado?: boolean
+  codigoVotacion?: string
+  imagenConfirmacion?: string
+  fechaConfirmacion?: string
+  confirmadoPor?: {
+    id: string
+    nombre: string
+  }
 }
 
-const defaultVotantes: Votante[] = [
-  { id: 1, nombre: "Juan Carlos Pérez", cedula: "1234567890", email: "juan@email.com", telefono: "3001234567", direccion: "Calle 45 #23-12, Centro", estado: "activo" },
-  { id: 2, nombre: "María García López", cedula: "9876543210", email: "maria@email.com", telefono: "3109876543", direccion: "Carrera 12 #34-56, La Esperanza", estado: "activo" },
-  { id: 3, nombre: "Pedro Martínez Ruiz", cedula: "5678901234", email: "pedro@email.com", telefono: "3205678901", direccion: "Avenida 5 #67-89, San Antonio", estado: "inactivo" },
-  { id: 4, nombre: "Ana Rodríguez Castro", cedula: "3456789012", email: "ana@email.com", telefono: "3153456789", direccion: "Calle 78 #12-34, Villa Rosa", estado: "activo" },
-  { id: 5, nombre: "Carlos Sánchez Mora", cedula: "7890123456", email: "carlos@email.com", telefono: "3007890123", direccion: "Carrera 34 #56-78, El Prado", estado: "activo" },
-  { id: 6, nombre: "Laura Hernández Villa", cedula: "2345678901", email: "laura@email.com", telefono: "3112345678", direccion: "Calle 23 #45-67, Centro", estado: "inactivo" },
-]
+const defaultVotantes: Votante[] = []
 
 interface VotantesListProps {
   searchTerm: string
@@ -35,18 +47,68 @@ export function VotantesList({ searchTerm }: VotantesListProps) {
   const [votantes, setVotantes] = useState<Votante[]>(defaultVotantes)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedVotante, setSelectedVotante] = useState<Votante | null>(null)
+  const [certificationDialogOpen, setCertificationDialogOpen] = useState(false)
+  const [certificationDetailsOpen, setCertificationDetailsOpen] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string | null>(null)
+  const [currentUserLeaderId, setCurrentUserLeaderId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+
+  // 🔹 NUEVO: filtro confirmados
+  const [showConfirmados, setShowConfirmados] = useState(false)
+
+  const pageSize = 12
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchVotantes = async () => {
       try {
         setLoading(true)
         setError(null)
-        // Descomenta cuando el endpoint esté listo
-        // const data = await votantesApi.getAll()
-        // setVotantes(data)
+
+        const role = getRoleFromToken()
+        setUserRole(role)
+
+        const userData = getUser()
+        if (userData) {
+          setUserName(userData.leader?.name || userData.username || "sin leader asociado")
+          setCurrentUserLeaderId(userData.leaderId || userData.leader?.id || null)
+        }
+
+        const token = getToken()
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        })
+
+        if (!res.ok) throw new Error(`Error fetching votaciones: ${res.status}`)
+        const data = await res.json()
+
+        const mapped: Votante[] = data.map((item: any) => ({
+          id: item.id,
+          nombre: [item.nombre1, item.nombre2, item.apellido1, item.apellido2].filter(Boolean).join(" "),
+          cedula: item.cedula,
+          telefono: item.telefono,
+          direccion: item.direccion,
+          barrio: item.barrio || "",
+          puestoVotacionNombre: item.puestoVotacionNombre || item.puestoVotacion || "",
+          planilla: item.planilla ?? 0,
+          leader: item.leader ? { name: item.leader.name } : undefined,
+          esPago: !!item.esPago,
+          isActive: !!item.isActive,
+          isDuplicate: !!item.isDuplicate,
+          certificado: item.confirmado || false,
+          confirmado: item.confirmado || false,
+          codigoVotacion: item.codigoVotacion,
+          imagenConfirmacion: item.imagenConfirmacion,
+          fechaConfirmacion: item.fechaConfirmacion,
+          confirmadoPor: item.confirmadoPor,
+        }))
+
+        setVotantes(mapped)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al cargar votantes')
-        setVotantes(defaultVotantes) // Fallback a datos de prueba
+        setError(err instanceof Error ? err.message : "Error al cargar votantes")
+        setVotantes(defaultVotantes)
       } finally {
         setLoading(false)
       }
@@ -55,61 +117,183 @@ export function VotantesList({ searchTerm }: VotantesListProps) {
     fetchVotantes()
   }, [])
 
-  const filteredVotantes = votantes.filter(
-    (v) =>
-      v.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.cedula.includes(searchTerm)
-  )
+  const query = searchTerm?.trim() || ""
+
+  // 🔹 FILTRO COMBINADO
+  const filteredVotantes = votantes.filter((v) => {
+    const matchesSearch = query ? v.cedula?.includes(query) : true
+    const matchesConfirmado = showConfirmados ? v.confirmado === true : true
+    return matchesSearch && matchesConfirmado
+  })
+
+  const totalPages = Math.max(1, Math.ceil(filteredVotantes.length / pageSize))
+  if (page > totalPages) setPage(totalPages)
+  const start = (page - 1) * pageSize
+  const paginatedVotantes = filteredVotantes.slice(start, start + pageSize)
+
+  const handleCertify = (votante: Votante) => {
+    setSelectedVotante(votante)
+    setCertificationDialogOpen(true)
+  }
+
+  const handleViewCertificationDetails = (votante: Votante) => {
+    setSelectedVotante(votante)
+    setCertificationDetailsOpen(true)
+  }
+
+  const handleCertificationConfirm = async (codigoBarras: string, imageBlob?: Blob | null) => {
+    if (!selectedVotante) return
+
+    try {
+      setLoading(true)
+
+      const form = new FormData()
+      form.append("codigoVotacion", codigoBarras)
+      if (imageBlob) form.append("imagen", imageBlob, "imagen.jpg")
+
+      const token = getToken()
+      const endpoint = `${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/${selectedVotante.id}/confirmar`
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: form,
+      })
+
+      if (!res.ok) throw new Error(`Error ${res.status}`)
+
+      const result = await res.json()
+
+      if (result.ok === true) {
+        setVotantes(
+          votantes.map((v) =>
+            v.id === selectedVotante.id
+              ? { ...v, certificado: true, confirmado: true, codigoVotacion: codigoBarras, fechaConfirmacion: new Date().toISOString() }
+              : v
+          )
+        )
+
+        toast({ title: "Éxito", description: result.message })
+        setCertificationDialogOpen(false)
+        setSelectedVotante(null)
+      }
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Error al certificar",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-    >
-      {filteredVotantes.map((votante, index) => (
-        <motion.div
-          key={votante.id}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.05 }}
+    <>
+      {/* BOTÓN FILTRO */}
+      <div className="mb-4 flex justify-end">
+        <Button
+          variant={showConfirmados ? "default" : "outline"}
+          onClick={() => {
+            setShowConfirmados((prev) => !prev)
+            setPage(1)
+          }}
         >
-          <Card className="border-border hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-start gap-4">
-                <Avatar className="w-12 h-12">
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {votante.nombre.split(" ").map(n => n[0]).slice(0, 2).join("")}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-semibold text-foreground truncate">{votante.nombre}</h3>
-                    <Badge variant="outline" className={votante.estado === "activo" ? "bg-accent/10 text-accent border-accent/20" : "bg-muted text-muted-foreground"}>
-                      {votante.estado}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">CC: {votante.cedula}</p>
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Mail className="w-3.5 h-3.5" />
-                      <span className="truncate">{votante.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>{votante.telefono}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="w-3.5 h-3.5" />
-                      <span className="truncate">{votante.direccion}</span>
-                    </div>
-                  </div>
+          {showConfirmados ? "Mostrar todos" : "Mostrar confirmados"}
+        </Button>
+      </div>
+
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {paginatedVotantes.map((votante, index) => (
+          <motion.div key={votante.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}>
+            <div className="relative bg-linear-to-br from-slate-50 to-slate-100 border-2 border-slate-300 rounded-lg shadow-lg hover:shadow-xl transition-all overflow-hidden">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-amber-500 via-yellow-400 to-amber-500" />
+
+              <div className="p-5 space-y-4">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-bold text-lg text-slate-800">{votante.nombre}</h3>
+                  <Avatar className="w-10 h-10">
+                    <AvatarFallback className="bg-amber-100 text-amber-900 font-bold">
+                      {votante.nombre.split(" ").map(n => n[0]).slice(0, 2).join("")}
+                    </AvatarFallback>
+                  </Avatar>
                 </div>
+
+                <div className="border-t-2 border-dashed border-slate-300 pt-3" />
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span>Cédula:</span><span className="font-mono font-bold">{votante.cedula}</span></div>
+                  <div className="flex justify-between"><span>Puesto:</span><span className="text-xs">{votante.puestoVotacionNombre}</span></div>
+                  <div className="flex justify-between"><span>Teléfono:</span><span>{votante.telefono}</span></div>
+                  <div className="flex justify-between"><span>Dirección:</span><span className="text-xs">{votante.direccion}</span></div>
+                </div>
+
+                <div className="border-t-2 border-dashed border-slate-300 pt-3" />
+
+                <div className="flex gap-2">
+                  <Badge className={votante.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    {votante.isActive ? "Activo" : "Inactivo"}
+                  </Badge>
+
+                  {votante.certificado && (
+                    <Badge className="bg-emerald-100 text-emerald-800">
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      Certificado
+                    </Badge>
+                  )}
+                </div>
+
+                {votante.confirmado ? (
+                  <Button onClick={() => handleViewCertificationDetails(votante)} className="w-full bg-emerald-500 text-white">
+                    <Eye className="w-4 h-4 mr-2" /> Ver detalles
+                  </Button>
+                ) : (
+                  <Button onClick={() => handleCertify(votante)} className="w-full bg-amber-500 text-white">
+                    <Shield className="w-4 h-4 mr-2" /> Certificar
+                  </Button>
+                )}
               </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ))}
-    </motion.div>
+
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-linear-to-r from-amber-500 via-yellow-400 to-amber-500" />
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* PAGINACIÓN */}
+      <div className="mt-4 flex justify-between items-center">
+        <span className="text-sm text-slate-600">{filteredVotantes.length} registros</span>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>Anterior</Button>
+          <span>{page}/{totalPages}</span>
+          <Button size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>Siguiente</Button>
+        </div>
+      </div>
+
+      {selectedVotante && (
+        <CertificateVerificationDialog
+          open={certificationDialogOpen}
+          onOpenChange={setCertificationDialogOpen}
+          votanteNombre={selectedVotante.nombre}
+          votanteCedula={selectedVotante.cedula}
+          votanteId={selectedVotante.id}
+          onConfirm={handleCertificationConfirm}
+        />
+      )}
+
+      {selectedVotante && (
+        <CertificationDetailsDialog
+          open={certificationDetailsOpen}
+          onOpenChange={setCertificationDetailsOpen}
+          votanteNombre={selectedVotante.nombre}
+          votanteCedula={selectedVotante.cedula}
+          codigoVotacion={selectedVotante.codigoVotacion}
+          imagenConfirmacion={selectedVotante.imagenConfirmacion}
+          fechaConfirmacion={selectedVotante.fechaConfirmacion}
+          confirmadoPor={selectedVotante.confirmadoPor}
+        />
+      )}
+    </>
   )
 }

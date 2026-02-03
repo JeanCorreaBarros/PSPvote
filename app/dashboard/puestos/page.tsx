@@ -27,6 +27,10 @@ interface Puesto {
   longitud: string
   createdAt: string
   updatedAt: string
+  totalVotaciones: number
+  porcentajeSobreVotaciones: number
+  porcentajeGeneralReal: number
+  porcentajePuesto: number
 }
 
 
@@ -96,7 +100,7 @@ export default function PuestosPage() {
             <h2 id="puestos-titulo" className="text-lg font-semibold text-foreground">Puestos de Votación</h2>
             <p className="text-sm text-muted-foreground">{filteredPuestos.length} puestos registrados</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className=" hidden items-center gap-3">
             <div id="puestos-nuevo-btn">
               <AddPuestoDialog />
             </div>
@@ -164,16 +168,16 @@ export default function PuestosPage() {
                         <p className="text-xs text-muted-foreground">Mesas</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-semibold text-foreground">{(puesto.mujeres).toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Mujeres</p>
+                        <p className="text-sm font-semibold text-foreground">{(puesto.total).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Total General por puesto</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-sm font-semibold text-foreground">{(puesto.hombres).toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Hombres</p>
+                        <p className="text-sm font-semibold text-foreground">{(puesto.totalVotaciones).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Total Votos Registardos</p>
                       </div>
                       <div className="text-center">
-                        <p className="text-lg font-semibold text-primary">{(puesto.total).toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Total</p>
+                        <p className="text-lg font-semibold text-primary">{(puesto.porcentajePuesto).toFixed(2)}%</p>
+                        <p className="text-xs text-muted-foreground">Porcentaje</p>
                       </div>
                     </div>
                     <div className="pt-3 border-t border-border">

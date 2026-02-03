@@ -26,26 +26,48 @@ interface Reporte {
 }
 
 const reportes: Reporte[] = [
-  { id: 1, nombre: "Resumen General de Votación", descripcion: "Estadísticas generales de participación electoral", icon: PieChart, descargas: [
+  {
+    id: 1, nombre: "Resumen General de Votación", descripcion: "Estadísticas generales de participación electoral", icon: PieChart, descargas: [
       { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfgeneral?formato=oficio" },
       { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelgeneral" },
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipgeneral?formato=oficio" }
-    ] },
-  { id: 2, nombre: "Registro por Puestos", descripcion: "Detalle de votantes por cada puesto de votación", icon: BarChart3, descargas: [
+    ]
+  },
+  {
+    id: 2, nombre: "Registro por Puestos", descripcion: "Detalle de votantes por cada puesto de votación", icon: BarChart3, descargas: [
       { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfporpuesto?formato=oficio" },
       { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelporpuesto" },
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipporpuesto?formato=oficio" }
-    ] },
-  { id: 3, nombre: "Registro por Lider", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
+    ]
+  },
+  {
+    id: 3, nombre: "Registro por Lider", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
       { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdf?formato=oficio" },
       { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcel" },
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdf?formato=oficio" }
-    ] },
-  { id: 4, nombre: "Registro por Programa", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
+    ]
+  },
+  {
+    id: 4, nombre: "Registro por Programa", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
       { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfporprograma?formato=oficio" },
       { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelporprograma" },
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipporprograma?formato=oficio" }
-    ] },
+    ]
+  },
+  {
+    id: 5, nombre: "Registro por Documentos", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfcedulas?formato=oficio&modo=cedulas_puesto" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelcedulas?formato=oficio&modo=cedulas_puesto" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfcedulas?formato=oficio&modo=cedulas_puesto" }
+    ]
+  },
+   {
+    id: 6, nombre: "Registro por Documentos Duplicados", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfcedulasduplicadas?formato=oficio&modo=cedulas_puesto" },
+      /*{ tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelduplicados" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipduplicados?formato=oficio" }*/
+    ]
+  },
 ]
 
 interface Estadisticas {
@@ -90,24 +112,24 @@ export default function ReportesPage() {
     try {
       setLoading(true)
       setError(null)
-      
+
       const token = localStorage.getItem('pspvote_token')
-      
+
       if (!token) {
         setError("No autorizado. Por favor inicia sesión nuevamente.")
         return
       }
-      
+
       if (!endpoint) {
         setError("Endpoint no configurado para este reporte.")
         return
       }
-      
+
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
       const fullUrl = `${apiBaseUrl}${endpoint}`
-      
+
       console.log(`Consumiendo endpoint: ${fullUrl}`)
-      
+
       const response = await fetch(fullUrl, {
         method: "GET",
         headers: {
@@ -115,11 +137,11 @@ export default function ReportesPage() {
           "Content-Type": "application/json",
         },
       })
-      
+
       if (!response.ok) {
         throw new Error(`Error: ${response.status} ${response.statusText}`)
       }
-      
+
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -137,9 +159,9 @@ export default function ReportesPage() {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      
+
       console.log(`Reporte descargado: ${fileName}`)
-      
+
     } catch (err) {
       setError(err instanceof Error ? err.message : `Error al descargar ${tipo}`)
       console.error("Error al descargar:", err)
@@ -246,13 +268,12 @@ export default function ReportesPage() {
                             <Button
                               key={idx}
                               size="sm"
-                              className={`gap-2 text-white ${
-                                descarga.tipo === "PDF"
-                                  ? "bg-red-600 hover:bg-red-700"
-                                  : descarga.tipo === "Excel"
+                              className={`gap-2 text-white ${descarga.tipo === "PDF"
+                                ? "bg-red-600 hover:bg-red-700"
+                                : descarga.tipo === "Excel"
                                   ? "bg-green-600 hover:bg-green-700"
                                   : "bg-violet-600 hover:bg-violet-700"
-                              }`}
+                                }`}
                               onClick={() => handleDescargar(reporte.id, descarga.tipo, descarga.endpoint)}
                               disabled={loading}
                             >
