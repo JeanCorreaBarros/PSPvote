@@ -68,6 +68,13 @@ const reportes: Reporte[] = [
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipduplicados?formato=oficio" }*/
     ]
   },
+  {
+    id: 7, nombre: "Registro por Documentos Confirmados", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfconfirmados?formato=oficio" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelconfirmados?formato=oficio" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipconfirmados?formato=oficio" }
+    ]
+  },
 ]
 
 interface Estadisticas {
