@@ -110,6 +110,8 @@ interface Votante {
   direccion: string
   barrio: string
   puestoVotacion: string
+  puestoVotacionNombre?: string
+  mesa?: string
   estado: "registrado" | "verificado" | "pendiente"
   fechaRegistro: string
   recomendado?: string
@@ -235,6 +237,8 @@ export default function RegistroVotosPage() {
           direccion: votante.direccion || 'N/A',
           barrio: votante.barrio || 'N/A',
           puestoVotacion: votante.puestoVotacion || 'N/A',
+          puestoVotacionNombre: votante.puestoVotacionNombre || (puestosVotacion.find(p => p.id === votante.puestoVotacion)?.puesto) || votante.puestoVotacion || 'N/A',
+          mesa: votante.mesa || 'N/A',
           estado: "registrado" as const,
           fechaRegistro: votante.createdAt ? new Date(votante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
           creadoPor: votante.leader?.name || 'N/A',
@@ -282,6 +286,7 @@ export default function RegistroVotosPage() {
     direccion: "",
     barrio: "",
     puestoVotacion: "",
+    mesa: "",
     recommendedById: "",
     leaderId: "",
     programaId: "",
@@ -460,22 +465,22 @@ export default function RegistroVotosPage() {
   useEffect(() => {
     console.log('🔍 currentUserLeaderId:', currentUserLeaderId)
     console.log('📊 Total de votantes:', votantes.length)
-    
+
     const digitadorRegistros = votantes.filter(v => v.leaderId !== currentUserLeaderId)
     const liderRegistros = votantes.filter(v => v.leaderId === currentUserLeaderId)
-    
+
     console.log('✅ Registros que NO coinciden (Digitador):', digitadorRegistros.length)
-    console.log('   Detalles:', digitadorRegistros.map(v => ({ 
-      id: v.id, 
-      nombre: `${v.nombre1} ${v.apellido1}`, 
-      leaderId: v.leaderId 
+    console.log('   Detalles:', digitadorRegistros.map(v => ({
+      id: v.id,
+      nombre: `${v.nombre1} ${v.apellido1}`,
+      leaderId: v.leaderId
     })))
-    
+
     console.log('❌ Registros que coinciden (Líder):', liderRegistros.length)
-    console.log('   Detalles:', liderRegistros.map(v => ({ 
-      id: v.id, 
-      nombre: `${v.nombre1} ${v.apellido1}`, 
-      leaderId: v.leaderId 
+    console.log('   Detalles:', liderRegistros.map(v => ({
+      id: v.id,
+      nombre: `${v.nombre1} ${v.apellido1}`,
+      leaderId: v.leaderId
     })))
   }, [currentUserLeaderId, votantes])
 
@@ -666,6 +671,7 @@ export default function RegistroVotosPage() {
           direccion: row.direccion,
           barrio: row.barrio,
           puestoVotacion: row.puestoVotacion,
+          mesa: row.mesa || null,
           recommendedById: row.recommendedById || null,
           leaderId: row.leaderId || null,
           programaId: row.programaId || null,
@@ -754,6 +760,7 @@ export default function RegistroVotosPage() {
         direccion: formData.direccion || '',
         barrio: formData.barrio || '',
         puestoVotacion: formData.puestoVotacion || '',
+        mesa: formData.mesa || undefined,
         recommendedById: formData.recommendedById || undefined,
         leaderId: formData.leaderId || undefined,
         programaId: formData.programaId || undefined,
@@ -786,6 +793,7 @@ export default function RegistroVotosPage() {
             direccion: dataToSend.direccion,
             barrio: dataToSend.barrio,
             puestoVotacion: dataToSend.puestoVotacion,
+            mesa: dataToSend.mesa ?? null,
             recommendedById: dataToSend.recommendedById ?? null,
             leaderId: dataToSend.leaderId ?? null,
             programaId: dataToSend.programaId ?? null,
@@ -831,6 +839,7 @@ export default function RegistroVotosPage() {
             direccion: dataToSend.direccion,
             barrio: dataToSend.barrio,
             puestoVotacion: dataToSend.puestoVotacion,
+            mesa: dataToSend.mesa ?? null,
             recommendedById: dataToSend.recommendedById ?? null,
             leaderId: dataToSend.leaderId ?? null,
             programaId: dataToSend.programaId ?? null,
@@ -933,6 +942,7 @@ export default function RegistroVotosPage() {
         direccion: votanteData.direccion || "",
         barrio: votanteData.barrio || "",
         puestoVotacion: votanteData.puestoVotacion || "",
+        mesa: votanteData.mesa || "",
         recommendedById: votanteData.recommendedById || "",
         leaderId: votanteData.leaderId || "",
         programaId: votanteData.programaId || "",
@@ -1055,6 +1065,7 @@ export default function RegistroVotosPage() {
       formData.direccion !== "" ||
       formData.barrio !== "" ||
       formData.puestoVotacion !== "" ||
+      formData.mesa !== "" ||
       formData.recommendedById !== "" ||
       formData.leaderId !== "" ||
       formData.programaId !== "" ||
@@ -1516,6 +1527,7 @@ export default function RegistroVotosPage() {
                                   <col className="w-[110px]" />
                                   <col className="w-[130px]" />
                                   <col className="w-[140px]" />
+                                   <col className="w-[140px]" />
                                 </colgroup>
                                 <thead>
                                   <tr className="bg-muted/50 border-b border-border">
@@ -1526,6 +1538,7 @@ export default function RegistroVotosPage() {
                                     <th className="px-2 py-2 text-left font-medium text-xs">Dirección</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Barrio</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Puesto</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Mesa</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Programa</th>
                                   </tr>
                                 </thead>
@@ -1600,7 +1613,17 @@ export default function RegistroVotosPage() {
                                         {puestosVotacion.find(p => p.id === formData.puestoVotacion)?.puesto || 'Sel.'}
                                       </button>
                                     </td>
-                                    
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="mesa"
+                                        value={formData.mesa}
+                                        onChange={(e) => setFormData({ ...formData, mesa: e.target.value })}
+                                         className="h-8 text-xs w-full max-w-[110px]"
+
+                                      />
+                                    </td>
+
                                     <td className="px-2 py-2 overflow-hidden">
                                       <button
                                         type="button"
@@ -1721,6 +1744,7 @@ export default function RegistroVotosPage() {
                                   <col className="w-[130px]" />
                                   <col className="w-[140px]" />
                                   <col className="w-[60px]" />
+                                  <col className="w-[60px]" />
                                 </colgroup>
                                 <thead>
                                   <tr className="bg-muted/50 border-b border-border">
@@ -1731,6 +1755,7 @@ export default function RegistroVotosPage() {
                                     <th className="px-2 py-2 text-left font-medium text-xs">Dirección</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Barrio</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Puesto</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Mesa</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Programa</th>
                                     <th className="px-2 py-2 text-center font-medium text-xs">Acciones</th>
                                   </tr>
@@ -1823,12 +1848,21 @@ export default function RegistroVotosPage() {
                                                 setSelectedPuestoModal(row.puestoVotacion)
                                                 setShowPuestosModal(true)
                                               }}
-                                              className={`h-8 text-xs w-full max-w-[130px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${
-                                                row.error ? 'border-red-400' : 'border-input'
-                                              }`}
+                                              className={`h-8 text-xs w-full max-w-[130px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${row.error ? 'border-red-400' : 'border-input'
+                                                }`}
                                             >
                                               {puestosVotacion.find(p => p.id === row.puestoVotacion)?.puesto || 'Sel.'}
                                             </button>
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="mesa"
+                                              value={row.mesa}
+                                              onChange={(e) => updateRow(row.id, { mesa: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
                                           </td>
                                           <td className="px-2 py-2 overflow-hidden">
                                             <button
@@ -1840,9 +1874,8 @@ export default function RegistroVotosPage() {
                                                 setSelectedProgramaModal(row.programaLabel)
                                                 setShowProgramasModal(true)
                                               }}
-                                              className={`h-8 text-xs w-full max-w-[140px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${
-                                                row.error ? 'border-red-400' : 'border-input'
-                                              }`}
+                                              className={`h-8 text-xs w-full max-w-[140px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${row.error ? 'border-red-400' : 'border-input'
+                                                }`}
                                             >
                                               {programasOpciones.find(p => p.label === row.programaLabel)?.label || 'Sel.'}
                                             </button>
@@ -2007,7 +2040,7 @@ export default function RegistroVotosPage() {
                         <TableCell className={`max-w-20 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.telefono}</TableCell>
                         <TableCell className={`max-w-20 truncate text-sm ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.direccion}</TableCell>
                         <TableCell className={`max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.barrio}</TableCell>
-                        <TableCell className={`max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.puestoVotacion}</TableCell>
+                        <TableCell className={`max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.puestoVotacionNombre}</TableCell>
                         <TableCell id="tabla-estado">{getStatusBadge(votante.estado, votante.isDuplicate)}</TableCell>
                         <TableCell className={votante.isDuplicate ? 'text-red-600' : 'text-muted-foreground'}>{votante.fechaRegistro}</TableCell>
                         <TableCell id="tabla-acciones">
@@ -2076,7 +2109,7 @@ export default function RegistroVotosPage() {
                     {(() => {
                       const pages: (number | string)[] = []
                       const maxPagesToShow = 10
-                      
+
                       if (totalPages <= maxPagesToShow) {
                         // Si hay 10 o menos páginas, mostrar todas
                         for (let i = 1; i <= totalPages; i++) {
@@ -2086,7 +2119,7 @@ export default function RegistroVotosPage() {
                         // Si hay más de 10 páginas
                         const rangeStart = Math.max(1, currentPage - 4)
                         const rangeEnd = Math.min(totalPages, currentPage + 5)
-                        
+
                         // Siempre mostrar la página 1
                         if (rangeStart > 1) {
                           pages.push(1)
@@ -2094,12 +2127,12 @@ export default function RegistroVotosPage() {
                             pages.push('...')
                           }
                         }
-                        
+
                         // Mostrar rango alrededor de la actual
                         for (let i = rangeStart; i <= rangeEnd; i++) {
                           pages.push(i)
                         }
-                        
+
                         // Siempre mostrar la última página
                         if (rangeEnd < totalPages) {
                           if (rangeEnd < totalPages - 1) {
@@ -2108,8 +2141,8 @@ export default function RegistroVotosPage() {
                           pages.push(totalPages)
                         }
                       }
-                      
-                      return pages.map((page, idx) => 
+
+                      return pages.map((page, idx) =>
                         page === '...' ? (
                           <span key={`dots-${idx}`} className="px-2 text-muted-foreground">...</span>
                         ) : (

@@ -102,6 +102,7 @@ export default function DashboardPage() {
         const res = await fetch(url, { headers })
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         const data = await res.json()
+      console.log("Datos de votaciones:", data)
 
         // Filtrar votaciones de hoy
         const today = new Date().toISOString().split('T')[0]
@@ -115,6 +116,7 @@ export default function DashboardPage() {
         })
 
         setVotacionesHoy(votacionesDeHoy)
+        console.log("Votaciones de hoy:", votacionesDeHoy)
       } catch (err: any) {
         console.error("Error fetching actividad:", err)
         setVotacionesHoy([])
