@@ -61,7 +61,7 @@ const reportes: Reporte[] = [
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfcedulas?formato=oficio&modo=cedulas_puesto" }
     ]
   },
-   {
+  {
     id: 6, nombre: "Registro por Documentos Duplicados", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
       { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfcedulasduplicadas?formato=oficio&modo=cedulas_puesto" },
       /*{ tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelduplicados" },
@@ -73,6 +73,20 @@ const reportes: Reporte[] = [
       { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfconfirmados?formato=oficio" },
       { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelconfirmados?formato=oficio" },
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipconfirmados?formato=oficio" }
+    ]
+  },
+  {
+    id: 8, nombre: "Registro por Barrios", descripcion: "Listado completo de votantes por barrios", icon: FileText, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfbarrio?formato=oficio" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelbarrio?formato=oficio" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfbarrio?formato=oficio" }
+    ]
+  },
+  {
+    id: 9, nombre: "Registro por Sedes", descripcion: "Listado completo de votantes por sedes", icon: FileText, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/dashboard/exportPdfPorSede?formato=oficio" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelsede?formato=oficio" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfsede?formato=oficio" }
     ]
   },
 ]
