@@ -77,14 +77,14 @@ const reportes: Reporte[] = [
   },
   {
     id: 8, nombre: "Registro por Barrios", descripcion: "Listado completo de votantes por barrios", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfbarrio?formato=oficio" },
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfporbarrio?formato=oficio" },
       { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelbarrio?formato=oficio" },
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfbarrio?formato=oficio" }
     ]
   },
   {
     id: 9, nombre: "Registro por Sedes", descripcion: "Listado completo de votantes por sedes", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/dashboard/exportPdfPorSede?formato=oficio" },
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/dashboard/exportpdfporsede?formato=oficio" },
       { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelsede?formato=oficio" },
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfsede?formato=oficio" }
     ]
