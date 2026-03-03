@@ -110,6 +110,8 @@ interface Votante {
   direccion: string
   barrio: string
   puestoVotacion: string
+  puestoVotacionNombre?: string
+  mesa?: string
   estado: "registrado" | "verificado" | "pendiente"
   fechaRegistro: string
   recomendado?: string
@@ -130,6 +132,20 @@ const getAvailableTabs = (role: string | null) => {
     return ["Todos"]
   }
   return ["Todos", "Digitador", "Líder", "Recomendado"]
+}
+
+// Función para traducir errores de Prisma
+const translatePrismaError = (errorMessage: string): string => {
+  if (errorMessage.includes('Unique constraint failed on the constraint: `Votacion_cedula_leaderId_key`')) {
+    return 'Esta cédula ya está registrada para este Líder. No se puede registrar la misma cédula dos veces con el mismo líder'
+  }
+  if (errorMessage.includes('Unique constraint failed')) {
+    return 'Este registro ya existe. Verifique que los datos sean únicos'
+  }
+  if (errorMessage.includes('Foreign key constraint failed')) {
+    return 'No se encontró uno de los registros relacionados. Verifique los datos'
+  }
+  return errorMessage
 }
 
 const Loading = () => null
@@ -167,6 +183,21 @@ export default function RegistroVotosPage() {
   const [toggleStatusId, setToggleStatusId] = useState<string | null>(null)
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
   const [observation, setObservation] = useState("")
+  const [showPuestosModal, setShowPuestosModal] = useState(false)
+  const [searchPuestosModal, setSearchPuestosModal] = useState("")
+  const [selectedPuestoModal, setSelectedPuestoModal] = useState<string | null>(null)
+  const [currentEditingField, setCurrentEditingField] = useState<'form' | 'row' | null>(null)
+  const [currentRowId, setCurrentRowId] = useState<string | null>(null)
+  const [showProgramasModal, setShowProgramasModal] = useState(false)
+  const [searchProgramasModal, setSearchProgramasModal] = useState("")
+  const [selectedProgramaModal, setSelectedProgramaModal] = useState<string | null>(null)
+  const [currentEditingFieldPrograma, setCurrentEditingFieldPrograma] = useState<'form' | 'row' | null>(null)
+  const [currentRowIdPrograma, setCurrentRowIdPrograma] = useState<string | null>(null)
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [duplicateVotanteData, setDuplicateVotanteData] = useState<any>(null)
+  const [duplicateCedula, setDuplicateCedula] = useState<string>("")
+  const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null)
+  const [validatingCedula, setValidatingCedula] = useState(false)
 
   // Hook para el tour automático del modal
   useRegistrarVotanteTour(isDialogOpen && !editingVotante)
@@ -206,6 +237,8 @@ export default function RegistroVotosPage() {
           direccion: votante.direccion || 'N/A',
           barrio: votante.barrio || 'N/A',
           puestoVotacion: votante.puestoVotacion || 'N/A',
+          puestoVotacionNombre: votante.puestoVotacionNombre || (puestosVotacion.find(p => p.id === votante.puestoVotacion)?.puesto) || votante.puestoVotacion || 'N/A',
+          mesa: votante.mesa || 'N/A',
           estado: "registrado" as const,
           fechaRegistro: votante.createdAt ? new Date(votante.createdAt).toLocaleDateString("es-CO") : new Date().toLocaleDateString("es-CO"),
           creadoPor: votante.leader?.name || 'N/A',
@@ -253,6 +286,7 @@ export default function RegistroVotosPage() {
     direccion: "",
     barrio: "",
     puestoVotacion: "",
+    mesa: "",
     recommendedById: "",
     leaderId: "",
     programaId: "",
@@ -431,22 +465,22 @@ export default function RegistroVotosPage() {
   useEffect(() => {
     console.log('🔍 currentUserLeaderId:', currentUserLeaderId)
     console.log('📊 Total de votantes:', votantes.length)
-    
+
     const digitadorRegistros = votantes.filter(v => v.leaderId !== currentUserLeaderId)
     const liderRegistros = votantes.filter(v => v.leaderId === currentUserLeaderId)
-    
+
     console.log('✅ Registros que NO coinciden (Digitador):', digitadorRegistros.length)
-    console.log('   Detalles:', digitadorRegistros.map(v => ({ 
-      id: v.id, 
-      nombre: `${v.nombre1} ${v.apellido1}`, 
-      leaderId: v.leaderId 
+    console.log('   Detalles:', digitadorRegistros.map(v => ({
+      id: v.id,
+      nombre: `${v.nombre1} ${v.apellido1}`,
+      leaderId: v.leaderId
     })))
-    
+
     console.log('❌ Registros que coinciden (Líder):', liderRegistros.length)
-    console.log('   Detalles:', liderRegistros.map(v => ({ 
-      id: v.id, 
-      nombre: `${v.nombre1} ${v.apellido1}`, 
-      leaderId: v.leaderId 
+    console.log('   Detalles:', liderRegistros.map(v => ({
+      id: v.id,
+      nombre: `${v.nombre1} ${v.apellido1}`,
+      leaderId: v.leaderId
     })))
   }, [currentUserLeaderId, votantes])
 
@@ -501,6 +535,81 @@ export default function RegistroVotosPage() {
     }])
   }
 
+  // Función para validar cédulas duplicadas
+  const validateCedula = async (cedula: string, rowId?: string) => {
+    if (!cedula.trim()) {
+      return
+    }
+
+    try {
+      setValidatingCedula(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/cedula/${cedula}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (response.ok) {
+        // La API puede devolver dos formas:
+        // 1) Un objeto con { votacion: {...} } cuando hay un registro existente
+        // 2) Un objeto con { message: 'Votación disponible para digitar', votacion: null } cuando está disponible para digitar
+        const data = await response.json()
+
+        // Si la API indica que la votación está disponible para digitar, permitir continuar (no abrir modal)
+        if ((data && data.votacion === null) && typeof data.message === 'string' && data.message.toLowerCase().includes('disponible')) {
+          // Limpiar cualquier estado de duplicado y permitir creación
+          if (rowId) {
+            setVotanteRows(votanteRows.map(row =>
+              row.id === rowId ? { ...row, error: undefined } : row
+            ))
+          }
+          setShowDuplicateModal(false)
+          setDuplicateMessage(null)
+          setDuplicateVotanteData(null)
+        } else {
+          // La cédula existe - mostrar modal de duplicado
+          setDuplicateCedula(cedula)
+          setDuplicateVotanteData(data)
+          setDuplicateMessage(null)
+          console.log('Cédula duplicada encontrada:', data)
+          setShowDuplicateModal(true)
+
+          // Marcar la fila en rojo si se especificó un rowId
+          if (rowId) {
+            setVotanteRows(votanteRows.map(row =>
+              row.id === rowId ? { ...row, error: 'Cédula Registrada' } : row
+            ))
+          }
+        }
+      } else if (response.status === 404) {
+        // La cédula no existe - permitir continuar
+        if (rowId) {
+          setVotanteRows(votanteRows.map(row =>
+            row.id === rowId ? { ...row, error: undefined } : row
+          ))
+        }
+        setShowDuplicateModal(false)
+        setDuplicateMessage(null)
+        setDuplicateVotanteData(null)
+      }
+    } catch (err) {
+      console.error('Error validando cédula:', err)
+      // En caso de error, permitir continuar
+    } finally {
+      setValidatingCedula(false)
+    }
+  }
+
   const updateRow = (id: string, updates: Partial<VotanteRowType>) => {
     setVotanteRows(votanteRows.map(row =>
       row.id === id ? { ...row, ...updates, error: undefined } : row
@@ -530,10 +639,10 @@ export default function RegistroVotosPage() {
 
       // Validar todos los registros
       for (const row of votanteRows) {
-        if (!row.nombre1 || !row.apellido1 || !row.cedula || !row.telefono || !row.direccion || !row.barrio || !row.puestoVotacion || !row.programaId) {
+        if (!row.nombre1 || !row.apellido1 || !row.cedula || !row.telefono || !row.direccion || !row.barrio || !row.puestoVotacion || !row.programaId || !row.leaderId) {
           updatedRows.push({
             ...row,
-            error: 'Campos incompletos'
+            error: !row.leaderId ? 'Debe asignar un Líder' : 'Campos incompletos'
           })
           failedCount++
         }
@@ -562,6 +671,7 @@ export default function RegistroVotosPage() {
           direccion: row.direccion,
           barrio: row.barrio,
           puestoVotacion: row.puestoVotacion,
+          mesa: row.mesa || null,
           recommendedById: row.recommendedById || null,
           leaderId: row.leaderId || null,
           programaId: row.programaId || null,
@@ -583,7 +693,21 @@ export default function RegistroVotosPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.message || 'Error al registrar votantes')
+        // Si la API devuelve la votación existente, mostrar modal de duplicado
+        if (errorData && errorData.votacion) {
+          setDuplicateCedula(errorData.votacion.cedula || (votantesParaEnviar && votantesParaEnviar[0]?.cedula) || '')
+          setDuplicateVotanteData(errorData.votacion)
+          setDuplicateMessage(errorData.message || null)
+          // marcar la fila relacionada con el mensaje si corresponde
+          if (errorData.message) {
+            setVotanteRows(prev => prev.map(row => ({ ...row, error: row.cedula === (errorData.votacion?.cedula) ? errorData.message : row.error })))
+          }
+          setShowDuplicateModal(true)
+          setLoading(false)
+          return
+        }
+        const errorMessage = errorData.message || errorData.error || 'Error al registrar votantes'
+        throw new Error(translatePrismaError(errorMessage))
       }
 
       const result = await response.json()
@@ -612,6 +736,12 @@ export default function RegistroVotosPage() {
       return
     }
 
+    // Validar que el Líder esté asignado
+    if (!formData.leaderId) {
+      toast.error('⚠️ Debe asignar un Líder para continuar')
+      return
+    }
+
 
     try {
       setLoading(true)
@@ -630,6 +760,7 @@ export default function RegistroVotosPage() {
         direccion: formData.direccion || '',
         barrio: formData.barrio || '',
         puestoVotacion: formData.puestoVotacion || '',
+        mesa: formData.mesa || undefined,
         recommendedById: formData.recommendedById || undefined,
         leaderId: formData.leaderId || undefined,
         programaId: formData.programaId || undefined,
@@ -662,6 +793,7 @@ export default function RegistroVotosPage() {
             direccion: dataToSend.direccion,
             barrio: dataToSend.barrio,
             puestoVotacion: dataToSend.puestoVotacion,
+            mesa: dataToSend.mesa ?? null,
             recommendedById: dataToSend.recommendedById ?? null,
             leaderId: dataToSend.leaderId ?? null,
             programaId: dataToSend.programaId ?? null,
@@ -676,7 +808,8 @@ export default function RegistroVotosPage() {
           if (response.status === 401 || errorData.error === 'No autorizado') {
             throw new Error('El usuario no está autorizado para esta función')
           }
-          throw new Error(errorData.message || 'Error al actualizar el votante')
+          const errorMessage = errorData.message || errorData.error || 'Error al actualizar el votante'
+          throw new Error(translatePrismaError(errorMessage))
         }
 
         // Recargar la lista de votantes desde la API
@@ -706,6 +839,7 @@ export default function RegistroVotosPage() {
             direccion: dataToSend.direccion,
             barrio: dataToSend.barrio,
             puestoVotacion: dataToSend.puestoVotacion,
+            mesa: dataToSend.mesa ?? null,
             recommendedById: dataToSend.recommendedById ?? null,
             leaderId: dataToSend.leaderId ?? null,
             programaId: dataToSend.programaId ?? null,
@@ -720,7 +854,22 @@ export default function RegistroVotosPage() {
           if (response.status === 401 || errorData.error === 'No autorizado') {
             throw new Error('El usuario no está autorizado para esta función')
           }
-          throw new Error(errorData.message || 'Error al registrar el votante')
+          // Si la API devuelve la votación existente, mostrar modal de duplicado
+          if (errorData && errorData.votacion) {
+            setDuplicateCedula(errorData.votacion.cedula || formData.cedula)
+            setDuplicateVotanteData(errorData.votacion)
+            setDuplicateMessage(errorData.message || null)
+            // Si la API envía un mensaje específico, marcar el formulario o la fila con el mensaje
+            if (errorData.message) {
+              // Para edición individual, añadimos message al campo error del row si existe
+              setVotanteRows(prev => prev.map(row => ({ ...row, error: row.cedula === (errorData.votacion?.cedula) ? errorData.message : row.error })))
+            }
+            setShowDuplicateModal(true)
+            setLoading(false)
+            return
+          }
+          const errorMessage = errorData.message || errorData.error || 'Error al registrar el votante'
+          throw new Error(translatePrismaError(errorMessage))
         }
 
         const nuevoVotante = await response.json()
@@ -793,6 +942,7 @@ export default function RegistroVotosPage() {
         direccion: votanteData.direccion || "",
         barrio: votanteData.barrio || "",
         puestoVotacion: votanteData.puestoVotacion || "",
+        mesa: votanteData.mesa || "",
         recommendedById: votanteData.recommendedById || "",
         leaderId: votanteData.leaderId || "",
         programaId: votanteData.programaId || "",
@@ -915,6 +1065,7 @@ export default function RegistroVotosPage() {
       formData.direccion !== "" ||
       formData.barrio !== "" ||
       formData.puestoVotacion !== "" ||
+      formData.mesa !== "" ||
       formData.recommendedById !== "" ||
       formData.leaderId !== "" ||
       formData.programaId !== "" ||
@@ -1376,6 +1527,7 @@ export default function RegistroVotosPage() {
                                   <col className="w-[110px]" />
                                   <col className="w-[130px]" />
                                   <col className="w-[140px]" />
+                                   <col className="w-[140px]" />
                                 </colgroup>
                                 <thead>
                                   <tr className="bg-muted/50 border-b border-border">
@@ -1386,6 +1538,7 @@ export default function RegistroVotosPage() {
                                     <th className="px-2 py-2 text-left font-medium text-xs">Dirección</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Barrio</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Puesto</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Mesa</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Programa</th>
                                   </tr>
                                 </thead>
@@ -1446,47 +1599,45 @@ export default function RegistroVotosPage() {
                                       />
                                     </td>
                                     <td className="px-2 py-2 overflow-hidden">
-                                      <Select value={formData.puestoVotacion} onValueChange={(value) => setFormData({ ...formData, puestoVotacion: value })}>
-                                        <SelectTrigger className="h-8 text-xs w-full max-w-[130px]">
-                                          <SelectValue placeholder="Sel." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {puestosVotacion.map((puesto) => (
-                                            <SelectItem key={puesto.id} value={puesto.id}>
-                                              {puesto.puesto}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCurrentEditingField('form')
+                                          setCurrentRowId(null)
+                                          setSearchPuestosModal("")
+                                          setSelectedPuestoModal(formData.puestoVotacion)
+                                          setShowPuestosModal(true)
+                                        }}
+                                        className="h-8 text-xs w-full max-w-[130px] px-2 py-1 border border-input rounded-md bg-background hover:bg-muted/50 text-left truncate"
+                                      >
+                                        {puestosVotacion.find(p => p.id === formData.puestoVotacion)?.puesto || 'Sel.'}
+                                      </button>
                                     </td>
                                     <td className="px-2 py-2 overflow-hidden">
-                                      <Select
-                                        value={formData.programaLabel}
-                                        onValueChange={(value) => {
-                                          const prog = programasOpciones.find(p => p.label === value)
-                                          if (prog) {
-                                            setFormData({
-                                              ...formData,
-                                              programaId: prog.programaId,
-                                              programaLabel: prog.label,
-                                              sedeId: prog.sedeId || null,
-                                              tipoVinculacionId: prog.tipoVinculacionId,
-                                              esPago: prog.esPago,
-                                            })
-                                          }
+                                      <Input
+                                        type="text"
+                                        placeholder="mesa"
+                                        value={formData.mesa}
+                                        onChange={(e) => setFormData({ ...formData, mesa: e.target.value })}
+                                         className="h-8 text-xs w-full max-w-[110px]"
+
+                                      />
+                                    </td>
+
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCurrentEditingFieldPrograma('form')
+                                          setCurrentRowIdPrograma(null)
+                                          setSearchProgramasModal("")
+                                          setSelectedProgramaModal(formData.programaLabel)
+                                          setShowProgramasModal(true)
                                         }}
+                                        className="h-8 text-xs w-full max-w-[140px] px-2 py-1 border border-input rounded-md bg-background hover:bg-muted/50 text-left truncate"
                                       >
-                                        <SelectTrigger className="h-8 text-xs w-full max-w-[140px]">
-                                          <SelectValue placeholder="Sel." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {programasOpciones.map((prog) => (
-                                            <SelectItem key={prog.label} value={prog.label}>
-                                              {prog.label}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                        {programasOpciones.find(p => p.label === formData.programaLabel)?.label || 'Sel.'}
+                                      </button>
                                     </td>
                                   </tr>
                                 </tbody>
@@ -1579,10 +1730,9 @@ export default function RegistroVotosPage() {
                             </div>
                           </form>
                         ) : (
-                          <form onSubmit={handleSubmitRows} className="p-6 space-y-4">
-                            {/* Tabla de Votantes - Modo Creación */}
+                          <form onSubmit={handleSubmitRows} className="p-6 space-y-4 flex flex-col h-full">
                             {/* Tabla horizontal */}
-                            <div className="overflow-x-auto border border-border rounded-lg">
+                            <div className="overflow-x-auto border border-border rounded-lg flex-1 overflow-y-auto max-h-[300px]">
                               <table className="w-full text-sm table-fixed">
                                 <colgroup>
                                   <col className="w-[120px]" />
@@ -1594,6 +1744,7 @@ export default function RegistroVotosPage() {
                                   <col className="w-[130px]" />
                                   <col className="w-[140px]" />
                                   <col className="w-[60px]" />
+                                  <col className="w-[60px]" />
                                 </colgroup>
                                 <thead>
                                   <tr className="bg-muted/50 border-b border-border">
@@ -1604,6 +1755,7 @@ export default function RegistroVotosPage() {
                                     <th className="px-2 py-2 text-left font-medium text-xs">Dirección</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Barrio</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Puesto</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Mesa</th>
                                     <th className="px-2 py-2 text-left font-medium text-xs">Programa</th>
                                     <th className="px-2 py-2 text-center font-medium text-xs">Acciones</th>
                                   </tr>
@@ -1646,6 +1798,12 @@ export default function RegistroVotosPage() {
                                               placeholder="Cédula"
                                               value={row.cedula}
                                               onChange={(e) => updateRow(row.id, { cedula: e.target.value })}
+                                              onBlur={(e) => {
+                                                const cedula = e.target.value.trim()
+                                                if (cedula) {
+                                                  validateCedula(cedula, row.id)
+                                                }
+                                              }}
                                               className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
                                                 }`}
                                             />
@@ -1681,54 +1839,52 @@ export default function RegistroVotosPage() {
                                             />
                                           </td>
                                           <td className="px-2 py-2 overflow-hidden">
-                                            <Select value={row.puestoVotacion} onValueChange={(value) => updateRow(row.id, { puestoVotacion: value })}>
-                                              <SelectTrigger className={`h-8 text-xs w-full max-w-[130px] ${row.error ? 'border-red-400' : ''
-                                                }`}>
-                                                <SelectValue placeholder="Sel." />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                {puestosVotacion.map((puesto) => (
-                                                  <SelectItem key={puesto.id} value={puesto.id}>
-                                                    {puesto.puesto}
-                                                  </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setCurrentEditingField('row')
+                                                setCurrentRowId(row.id)
+                                                setSearchPuestosModal("")
+                                                setSelectedPuestoModal(row.puestoVotacion)
+                                                setShowPuestosModal(true)
+                                              }}
+                                              className={`h-8 text-xs w-full max-w-[130px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${row.error ? 'border-red-400' : 'border-input'
+                                                }`}
+                                            >
+                                              {puestosVotacion.find(p => p.id === row.puestoVotacion)?.puesto || 'Sel.'}
+                                            </button>
                                           </td>
                                           <td className="px-2 py-2 overflow-hidden">
-                                            <Select
-                                              value={row.programaLabel || ""}
-                                              onValueChange={(value) => {
-                                                const prog = programasOpciones.find(p => p.label === value)
-                                                if (prog) {
-                                                  updateRow(row.id, {
-                                                    programaId: prog.programaId,
-                                                    programaLabel: prog.label,
-                                                    sedeId: prog.sedeId || null,
-                                                    tipoVinculacionId: prog.tipoVinculacionId,
-                                                    esPago: prog.esPago,
-                                                  })
-                                                }
+                                            <Input
+                                              type="text"
+                                              placeholder="mesa"
+                                              value={row.mesa}
+                                              onChange={(e) => updateRow(row.id, { mesa: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setCurrentEditingFieldPrograma('row')
+                                                setCurrentRowIdPrograma(row.id)
+                                                setSearchProgramasModal("")
+                                                setSelectedProgramaModal(row.programaLabel)
+                                                setShowProgramasModal(true)
                                               }}
+                                              className={`h-8 text-xs w-full max-w-[140px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${row.error ? 'border-red-400' : 'border-input'
+                                                }`}
                                             >
-                                              <SelectTrigger className={`h-8 text-xs w-full max-w-[140px] ${row.error ? 'border-red-400' : ''
-                                                }`}>
-                                                <SelectValue placeholder="Sel." />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                {programasOpciones.map((prog) => (
-                                                  <SelectItem key={prog.label} value={prog.label}>
-                                                    {prog.label}
-                                                  </SelectItem>
-                                                ))}
-                                              </SelectContent>
-                                            </Select>
+                                              {programasOpciones.find(p => p.label === row.programaLabel)?.label || 'Sel.'}
+                                            </button>
                                           </td>
                                           <td className="px-2 py-2 text-center overflow-hidden">
                                             <button
                                               type="button"
                                               onClick={() => deleteRow(row.id)}
-                                              className="text-muted-foreground hover:text-red-600"
+                                              className="text-muted-foreground cursor-pointer  hover:text-red-600"
                                               title="Eliminar"
                                             >
                                               <Trash2 className="w-4 h-4" />
@@ -1744,7 +1900,7 @@ export default function RegistroVotosPage() {
 
                             {/* Mostrar errores debajo de la tabla */}
                             {votanteRows.some(r => r.error) && (
-                              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                              <div className="p-3 bg-red-50 border border-red-200 rounded-lg mt-4">
                                 <p className="text-sm font-semibold text-red-700 mb-2">Errores encontrados:</p>
                                 {votanteRows.map((row) => row.error && (
                                   <div key={row.id} className="text-xs text-red-600 mb-1">
@@ -1755,13 +1911,13 @@ export default function RegistroVotosPage() {
                             )}
 
                             {/* Botón para agregar fila */}
-                            <div className="flex justify-between items-center pt-2">
+                            <div className="flex justify-between items-center pt-4 border-t border-border mt-4">
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 onClick={addNewRow}
-                                className="gap-2"
+                                className="gap-2 cursor-pointer"
                               >
                                 <Plus className="w-4 h-4" />
                                 Agregar Fila
@@ -1772,6 +1928,7 @@ export default function RegistroVotosPage() {
                                 <Button
                                   type="button"
                                   variant="outline"
+                                  className="cursor-pointer "
                                   onClick={() => {
                                     if (!hasUnsavedChanges()) {
                                       resetForm()
@@ -1786,7 +1943,7 @@ export default function RegistroVotosPage() {
                                 <Button
                                   id="form-submit"
                                   type="submit"
-                                  className="bg-primary text-primary-foreground"
+                                  className="bg-primary  cursor-pointer  text-primary-foreground"
                                   disabled={loading}
                                 >
                                   {loading ? "Registrando..." : "Registrar Todo"}
@@ -1833,8 +1990,8 @@ export default function RegistroVotosPage() {
                   <TableRow id="registro-tabla-header" className="border-border hover:bg-transparent">
                     <TableHead className="w-12"></TableHead>
                     <TableHead className="text-muted-foreground font-medium max-w-32 truncate">ID</TableHead>
-                    {userRole === "ADMIN" && (
-                      <TableHead className="text-muted-foreground font-medium">Creado Por</TableHead>
+                    {(userRole === "ADMIN" || userRole === "LIDER") && (
+                      <TableHead className="text-muted-foreground font-medium">{userRole === "ADMIN" ? "Creado Por" : "Líder Asignado"}</TableHead>
                     )}
                     <TableHead className="text-muted-foreground font-medium">Votante</TableHead>
                     <TableHead className="text-muted-foreground font-medium">Cédula</TableHead>
@@ -1863,7 +2020,7 @@ export default function RegistroVotosPage() {
                           <input type="checkbox" className="rounded border-border ml-5" />
                         </TableCell>
                         <TableCell className={`font-medium max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`} title={votante.id}>{votante.idnumber}</TableCell>
-                        {userRole === "ADMIN" && (
+                        {(userRole === "ADMIN" || userRole === "LIDER") && (
                           <TableCell className={`font-medium max-w-32 truncate text-sm ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`} title={votante.creadoPor}>{votante.creadoPor}</TableCell>
                         )}
                         <TableCell id="tabla-avatar">
@@ -1883,7 +2040,7 @@ export default function RegistroVotosPage() {
                         <TableCell className={`max-w-20 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.telefono}</TableCell>
                         <TableCell className={`max-w-20 truncate text-sm ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.direccion}</TableCell>
                         <TableCell className={`max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.barrio}</TableCell>
-                        <TableCell className={`max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.puestoVotacion}</TableCell>
+                        <TableCell className={`max-w-32 truncate ${votante.isDuplicate ? 'text-red-700' : 'text-foreground'}`}>{votante.puestoVotacionNombre}</TableCell>
                         <TableCell id="tabla-estado">{getStatusBadge(votante.estado, votante.isDuplicate)}</TableCell>
                         <TableCell className={votante.isDuplicate ? 'text-red-600' : 'text-muted-foreground'}>{votante.fechaRegistro}</TableCell>
                         <TableCell id="tabla-acciones">
@@ -1933,7 +2090,7 @@ export default function RegistroVotosPage() {
               </div>
             )}
 
-            {/* Paginación */}
+            {/* Paginación inteligente */}
             {filteredVotantes.length > 0 && (
               <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/30">
                 <div className="text-sm text-muted-foreground">
@@ -1949,18 +2106,59 @@ export default function RegistroVotosPage() {
                     Anterior
                   </Button>
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`px-2 py-1 rounded text-sm transition-colors ${currentPage === page
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted text-muted-foreground hover:bg-muted-foreground/10'
-                          }`}
-                      >
-                        {page}
-                      </button>
-                    ))}
+                    {(() => {
+                      const pages: (number | string)[] = []
+                      const maxPagesToShow = 10
+
+                      if (totalPages <= maxPagesToShow) {
+                        // Si hay 10 o menos páginas, mostrar todas
+                        for (let i = 1; i <= totalPages; i++) {
+                          pages.push(i)
+                        }
+                      } else {
+                        // Si hay más de 10 páginas
+                        const rangeStart = Math.max(1, currentPage - 4)
+                        const rangeEnd = Math.min(totalPages, currentPage + 5)
+
+                        // Siempre mostrar la página 1
+                        if (rangeStart > 1) {
+                          pages.push(1)
+                          if (rangeStart > 2) {
+                            pages.push('...')
+                          }
+                        }
+
+                        // Mostrar rango alrededor de la actual
+                        for (let i = rangeStart; i <= rangeEnd; i++) {
+                          pages.push(i)
+                        }
+
+                        // Siempre mostrar la última página
+                        if (rangeEnd < totalPages) {
+                          if (rangeEnd < totalPages - 1) {
+                            pages.push('...')
+                          }
+                          pages.push(totalPages)
+                        }
+                      }
+
+                      return pages.map((page, idx) =>
+                        page === '...' ? (
+                          <span key={`dots-${idx}`} className="px-2 text-muted-foreground">...</span>
+                        ) : (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page as number)}
+                            className={`px-2 py-1 rounded text-sm transition-colors ${currentPage === page
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground hover:bg-muted-foreground/10'
+                              }`}
+                          >
+                            {page}
+                          </button>
+                        )
+                      )
+                    })()}
                   </div>
                   <Button
                     variant="outline"
@@ -2055,6 +2253,267 @@ export default function RegistroVotosPage() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de búsqueda de puestos de votación */}
+      {showPuestosModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg w-full max-w-md p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-foreground">
+                Seleccionar Puesto de Votación
+              </h2>
+              <button
+                onClick={() => setShowPuestosModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Búsqueda */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar puesto..."
+                  value={searchPuestosModal}
+                  onChange={(e) => setSearchPuestosModal(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-input rounded-md bg-background text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            {/* Lista de puestos */}
+            <div className="max-h-96 overflow-y-auto border border-border rounded-md">
+              {puestosVotacion
+                .filter(puesto =>
+                  puesto.puesto.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                  puesto.municipio.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                  puesto.direccion.toLowerCase().includes(searchPuestosModal.toLowerCase())
+                )
+                .length > 0 ? (
+                puestosVotacion
+                  .filter(puesto =>
+                    puesto.puesto.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                    puesto.municipio.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                    puesto.direccion.toLowerCase().includes(searchPuestosModal.toLowerCase())
+                  )
+                  .map((puesto) => (
+                    <button
+                      key={puesto.id}
+                      type="button"
+                      onClick={() => {
+                        if (currentEditingField === 'form') {
+                          setFormData({ ...formData, puestoVotacion: puesto.id })
+                        } else if (currentEditingField === 'row' && currentRowId) {
+                          updateRow(currentRowId, { puestoVotacion: puesto.id })
+                        }
+                        setShowPuestosModal(false)
+                      }}
+                      className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent transition-colors last:border-b-0 ${selectedPuestoModal === puesto.id ? 'bg-primary/10' : ''}`}
+                    >
+                      <div className="font-medium text-sm text-foreground">
+                        {puesto.puesto}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {puesto.municipio} • {puesto.direccion}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Total: {puesto.total} ({puesto.mesas} mesas)
+                      </div>
+                    </button>
+                  ))
+              ) : (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No se encontraron puestos de votación
+                </div>
+              )}
+            </div>
+
+            {/* Botones */}
+            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPuestosModal(false)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de búsqueda de programas */}
+      {showProgramasModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg w-full max-w-md p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-foreground">
+                Seleccionar Programa
+              </h2>
+              <button
+                onClick={() => setShowProgramasModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Búsqueda */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar programa..."
+                  value={searchProgramasModal}
+                  onChange={(e) => setSearchProgramasModal(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-input rounded-md bg-background text-sm outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            {/* Lista de programas */}
+            <div className="max-h-96 overflow-y-auto border border-border rounded-md">
+              {programasOpciones
+                .filter(prog =>
+                  prog.label.toLowerCase().includes(searchProgramasModal.toLowerCase())
+                )
+                .length > 0 ? (
+                programasOpciones
+                  .filter(prog =>
+                    prog.label.toLowerCase().includes(searchProgramasModal.toLowerCase())
+                  )
+                  .map((prog) => (
+                    <button
+                      key={prog.label}
+                      type="button"
+                      onClick={() => {
+                        if (currentEditingFieldPrograma === 'form') {
+                          setFormData({
+                            ...formData,
+                            programaId: prog.programaId,
+                            programaLabel: prog.label,
+                            sedeId: prog.sedeId || null,
+                            tipoVinculacionId: prog.tipoVinculacionId,
+                            esPago: prog.esPago,
+                          })
+                        } else if (currentEditingFieldPrograma === 'row' && currentRowIdPrograma) {
+                          updateRow(currentRowIdPrograma, {
+                            programaId: prog.programaId,
+                            programaLabel: prog.label,
+                            sedeId: prog.sedeId || null,
+                            tipoVinculacionId: prog.tipoVinculacionId,
+                            esPago: prog.esPago,
+                          })
+                        }
+                        setShowProgramasModal(false)
+                      }}
+                      className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent transition-colors last:border-b-0 ${selectedProgramaModal === prog.label ? 'bg-primary/10' : ''}`}
+                    >
+                      <div className="font-medium text-sm text-foreground">
+                        {prog.label}
+                      </div>
+                    </button>
+                  ))
+              ) : (
+                <div className="p-4 text-center text-sm text-muted-foreground">
+                  No se encontraron programas
+                </div>
+              )}
+            </div>
+
+            {/* Botones */}
+            <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowProgramasModal(false)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cédula duplicada */}
+      {showDuplicateModal && duplicateVotanteData && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg max-w-md w-full p-6 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <X className="w-6 h-6 text-red-600" />
+              </div>
+              <h2 className="text-lg font-semibold text-foreground">Ya se encuentra registrada</h2>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-4">
+              {duplicateMessage ? (
+                <span className="font-semibold text-foreground">{duplicateMessage}</span>
+              ) : (
+                <>La cédula <span className="font-semibold text-foreground">{duplicateCedula}</span> ya se encuentra registrada en el sistema.</>
+              )}
+            </p>
+
+            <div className="bg-muted/50 rounded-lg p-4 mb-4 space-y-2 border border-border">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Nombre Registrado:</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.nombre1} {(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.apellido1}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Teléfono:</p>
+                <p className="text-sm text-foreground">{(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.telefono}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Dirección:</p>
+                <p className="text-sm text-foreground">{(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.direccion}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Barrio:</p>
+                <p className="text-sm text-foreground">{(duplicateVotanteData?.votacion ?? duplicateVotanteData)?.barrio}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Puesto de Votación:</p>
+                <p className="text-sm text-foreground">
+                  {puestosVotacion.find(p => p.id === (duplicateVotanteData?.votacion ?? duplicateVotanteData)?.puestoVotacion)?.puesto || 'No especificado'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Fecha de Registro:</p>
+                <p className="text-sm text-foreground">
+                  {new Date((duplicateVotanteData?.votacion ?? duplicateVotanteData)?.createdAt).toLocaleDateString("es-CO")}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground mb-6">
+              Si cree que esto es un error, contacte con el administrador del sistema.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                className="bg-primary text-primary-foreground"
+                onClick={() => {
+                  setShowDuplicateModal(false)
+                  setDuplicateVotanteData(null)
+                  setDuplicateCedula("")
+                  setDuplicateMessage(null)
+                }}
+              >
+                Entendido
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -48,27 +48,26 @@ export function AddLiderDialog({
     usuario.role?.name?.toLowerCase().includes(userSearchTerm.toLowerCase())
   )
 
-
+  // Función para cargar los usuarios
+  const loadUsuarios = async () => {
+    try {
+      setIsLoading(true)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/users`)
+      if (!response.ok) {
+        throw new Error("Error al cargar los usuarios")
+      }
+      const userData = await response.json()
+      setUsuarios(userData)
+    } catch (error) {
+      console.error("Error al cargar usuarios:", error)
+      toast.error("Error al cargar los usuarios del sistema")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const loadLeaders = async () => {
-      try {
-        setIsLoading(true)
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/users`)
-        if (!response.ok) {
-          throw new Error("Error al cargar los líderes")
-        }
-        const leadersData = await response.json()
-        setUsuarios(leadersData)
-      } catch (error) {
-        console.error("Error al cargar líderes:", error)
-        toast.error("Error al cargar los líderes del sistema")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadLeaders()
+    loadUsuarios()
   }, [])
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -148,12 +147,17 @@ export function AddLiderDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* ================= USUARIO ================= */}
           <div className="space-y-2">
-            <Label>Usuario (Opciondddal)</Label>
+            <Label>Usuario (Opcional)</Label>
 
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowUserSelect(!showUserSelect)}
+              onClick={() => {
+                setShowUserSelect(!showUserSelect)
+                if (!showUserSelect) {
+                  loadUsuarios()
+                }
+              }}
               className="w-full justify-between"
             >
               {selectedUserId

@@ -12,6 +12,7 @@ import Loading from "./loading"
 
 export default function VotantesPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [filterConfirmado, setFilterConfirmado] = useState(false)
 
   return (
     <div className="min-h-screen">
@@ -29,7 +30,13 @@ export default function VotantesPage() {
               className="pl-9 bg-muted/50"
             />
           </div>
-          <AddVotanteDialog />
+          {/*<Button
+            variant={filterConfirmado ? "default" : "outline"}
+            onClick={() => setFilterConfirmado(!filterConfirmado)}
+            className="w-full sm:w-auto"
+          >
+            {filterConfirmado ? "✓ Confirmados" : "Mostrar Confirmados"}
+          </Button>*/}
         </div>
 
         <Suspense fallback={<Loading />}>

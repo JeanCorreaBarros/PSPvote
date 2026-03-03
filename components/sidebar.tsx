@@ -51,24 +51,24 @@ const menuItems: MenuItem[] = [
     href: "/dashboard/registro-votos",
     requiredRole: ["ADMIN", "LIDER"] // Ambos roles pueden ver
   },
- /* { 
+  { 
     icon: Users, 
-    label: "Votantes", 
+    label: "Confirmacion de Certificados", 
     href: "/dashboard/votantes",
     requiredRole: ["ADMIN"] // Solo ADMIN
-  },*/
+  },
   { 
     icon: MapPin, 
     label: "Puestos de Votación", 
     href: "/dashboard/puestos",
     requiredRole: ["ADMIN"] // Solo ADMIN
   },
-  { 
+  /*{ 
     icon: Map, 
     label: "Mapa de Líderes", 
     href: "/dashboard/mapa-lideres",
     requiredRole: ["ADMIN"] // Solo ADMIN
-  },
+  },*/
   { 
     icon: BarChart3, 
     label: "Reportes", 

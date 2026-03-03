@@ -29,6 +29,10 @@ interface PuestoDetailsProps {
   longitud: string
   createdAt: string
   updatedAt: string
+  totalVotaciones: number
+  porcentajeSobreVotaciones: number
+  porcentajeGeneralReal: number
+  porcentajePuesto: number
 }
 
 interface PuestoDetailsDialogProps {
@@ -154,6 +158,37 @@ export function PuestoDetailsDialog({ puesto, open, onOpenChange }: PuestoDetail
                   <span>{((puesto.hombres / puesto.total) * 100).toFixed(1)}%</span>
                 </div>
               </div>
+            </div>
+
+            {/* Total Votaciones y Porcentaje */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <Card className="border-border bg-linear-to-br from-orange-50 to-orange-50/50 dark:from-orange-950/30 dark:to-orange-950/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Total Votaciones
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold text-orange-600 dark:text-orange-400">{puesto.totalVotaciones.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Votos registrados
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border bg-linear-to-br from-cyan-50 to-cyan-50/50 dark:from-cyan-950/30 dark:to-cyan-950/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Porcentaje
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold text-cyan-600 dark:text-cyan-400">{puesto.porcentajePuesto.toFixed(2)}%</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    sobre votaciones
+                  </p>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Información de mesas */}

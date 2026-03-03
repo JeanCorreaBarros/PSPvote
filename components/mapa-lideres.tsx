@@ -10,12 +10,25 @@ import { Spinner } from "@/components/ui/spinner"
 
 interface Lider {
   id: string
-  nombre: string
-  apellido: string
-  telefono: string
+  name: string
+  phone: string
+  address: string
+  recommendedById?: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+  recommendedBy?: any
+  recommendations?: any[]
+  users?: any[]
+  lat?: number | null
+  lng?: number | null
+  // Propiedades antiguas (por compatibilidad)
+  nombre?: string
+  apellido?: string
+  telefono?: string
   email?: string
-  latitud: number
-  longitud: number
+  latitud?: number | null
+  longitud?: number | null
   zona?: string
   estado?: "activo" | "inactivo"
 }
@@ -72,14 +85,44 @@ export function MapaLideres({ lideres, loading = false, error = null }: MapaLide
     setMounted(true)
   }, [])
 
+  // Filtrar líderes con coordenadas válidas
+  const lideresConUbicacion = lideres.filter((l) => {
+    const lat = l.lat !== null && l.lat !== undefined ? l.lat : l.latitud
+    const lng = l.lng !== null && l.lng !== undefined ? l.lng : l.longitud
+    return lat != null && lng != null
+  })
+
+  // Función auxiliar para obtener nombre
+  const getNombre = (lider: Lider): string => {
+    return lider.name || `${lider.nombre || ''} ${lider.apellido || ''}`.trim()
+  }
+
+  // Función auxiliar para obtener teléfono
+  const getTelefono = (lider: Lider): string => {
+    return lider.phone || lider.telefono || ''
+  }
+
+  // Función auxiliar para obtener estado
+  const getEstado = (lider: Lider): "activo" | "inactivo" => {
+    return lider.isActive ? "activo" : (lider.estado || "activo")
+  }
+
+  // Función auxiliar para obtener coordenadas
+  const getCoord = (lider: Lider): [number, number] => {
+    const lat = lider.lat !== null && lider.lat !== undefined ? lider.lat : lider.latitud
+    const lng = lider.lng !== null && lider.lng !== undefined ? lider.lng : lider.longitud
+    return [lat as number, lng as number]
+  }
+
   // Calcular el centro del mapa basado en las coordenadas de los líderes
   const calcularCentro = (): [number, number] => {
-    if (lideres.length === 0) {
+    if (lideresConUbicacion.length === 0) {
       return [10.9403, -74.7660] // Soledad, Atlántico por defecto
     }
 
-    const latPromedio = lideres.reduce((sum, l) => sum + l.latitud, 0) / lideres.length
-    const longPromedio = lideres.reduce((sum, l) => sum + l.longitud, 0) / lideres.length
+    const coords = lideresConUbicacion.map(getCoord)
+    const latPromedio = coords.reduce((sum, c) => sum + c[0], 0) / coords.length
+    const longPromedio = coords.reduce((sum, c) => sum + c[1], 0) / coords.length
 
     return [latPromedio, longPromedio]
   }
@@ -114,6 +157,17 @@ export function MapaLideres({ lideres, loading = false, error = null }: MapaLide
     )
   }
 
+  if (lideresConUbicacion.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-96 bg-yellow-50 rounded-lg border border-yellow-200">
+        <div className="text-center">
+          <p className="text-yellow-800 font-medium">⚠️ No hay líderes con ubicación</p>
+          <p className="text-sm text-yellow-700 mt-2">{lideres.length} líderes cargados sin coordenadas válidas</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="w-full space-y-4">
       {/* Estadísticas */}
@@ -129,22 +183,20 @@ export function MapaLideres({ lideres, loading = false, error = null }: MapaLide
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Activos</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Con Ubicación</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-green-600">
-              {lideres.filter((l) => l.estado === "activo").length}
-            </p>
+            <p className="text-2xl font-bold text-blue-600">{lideresConUbicacion.length}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Inactivos</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Activos</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-red-600">
-              {lideres.filter((l) => l.estado === "inactivo").length}
+            <p className="text-2xl font-bold text-green-600">
+              {lideresConUbicacion.filter((l) => getEstado(l) === "activo").length}
             </p>
           </CardContent>
         </Card>
@@ -154,7 +206,7 @@ export function MapaLideres({ lideres, loading = false, error = null }: MapaLide
             <CardTitle className="text-sm font-medium text-muted-foreground">Zonas</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{new Set(lideres.map((l) => l.zona)).size}</p>
+            <p className="text-2xl font-bold">{new Set(lideresConUbicacion.map((l) => l.zona)).size}</p>
           </CardContent>
         </Card>
       </div>
@@ -175,41 +227,38 @@ export function MapaLideres({ lideres, loading = false, error = null }: MapaLide
               <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {lideres.map((lider) => (
+              {lideresConUbicacion.map((lider) => (
                 <Marker
                   key={lider.id}
-                  position={[lider.latitud, lider.longitud]}
-                  icon={crearIcono(lider.estado) as any}
+                  position={getCoord(lider)}
+                  icon={crearIcono(getEstado(lider)) as any}
                 >
                   <Popup>
                     <div className="w-64 p-3 space-y-2">
                       <div>
                         <h3 className="font-bold text-foreground">
-                          {lider.nombre} {lider.apellido}
+                          {getNombre(lider)}
                         </h3>
                         {lider.zona && <p className="text-xs text-muted-foreground">Zona: {lider.zona}</p>}
                       </div>
 
                       <div className="space-y-1 text-sm">
-                        {lider.email && (
+                        {lider.address && (
                           <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">📧</span>
-                            <a
-                              href={`mailto:${lider.email}`}
-                              className="text-primary hover:underline"
-                            >
-                              {lider.email}
-                            </a>
+                            <span className="text-muted-foreground">📍</span>
+                            <span className="text-primary">
+                              {lider.address}
+                            </span>
                           </div>
                         )}
-                        {lider.telefono && (
+                        {getTelefono(lider) && (
                           <div className="flex items-center gap-2">
                             <span className="text-muted-foreground">📱</span>
                             <a
-                              href={`tel:${lider.telefono}`}
+                              href={`tel:${getTelefono(lider)}`}
                               className="text-primary hover:underline"
                             >
-                              {lider.telefono}
+                              {getTelefono(lider)}
                             </a>
                           </div>
                         )}
@@ -217,14 +266,14 @@ export function MapaLideres({ lideres, loading = false, error = null }: MapaLide
 
                       <div className="flex gap-2">
                         <Badge
-                          variant={lider.estado === "activo" ? "default" : "secondary"}
+                          variant={getEstado(lider) === "activo" ? "default" : "secondary"}
                           className={
-                            lider.estado === "activo"
+                            getEstado(lider) === "activo"
                               ? "bg-green-600"
                               : "bg-red-600"
                           }
                         >
-                          {lider.estado === "activo" ? "Activo" : "Inactivo"}
+                          {getEstado(lider) === "activo" ? "Activo" : "Inactivo"}
                         </Badge>
                       </div>
                     </div>
@@ -254,28 +303,31 @@ export function MapaLideres({ lideres, loading = false, error = null }: MapaLide
                 </tr>
               </thead>
               <tbody>
-                {lideres.map((lider) => (
-                  <tr key={lider.id} className="border-b border-border hover:bg-muted/50">
-                    <td className="py-2 px-3 font-medium">
-                      {lider.nombre} {lider.apellido}
-                    </td>
-                    <td className="py-2 px-3 text-muted-foreground">{lider.zona || "—"}</td>
-                    <td className="py-2 px-3 text-muted-foreground">{lider.telefono}</td>
-                    <td className="py-2 px-3 text-xs text-muted-foreground font-mono">
-                      {lider.latitud.toFixed(4)}, {lider.longitud.toFixed(4)}
-                    </td>
-                    <td className="py-2 px-3">
-                      <Badge
-                        variant={lider.estado === "activo" ? "default" : "secondary"}
-                        className={
-                          lider.estado === "activo" ? "bg-green-600" : "bg-red-600"
-                        }
-                      >
-                        {lider.estado === "activo" ? "Activo" : "Inactivo"}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
+                {lideresConUbicacion.map((lider) => {
+                  const [lat, lng] = getCoord(lider)
+                  return (
+                    <tr key={lider.id} className="border-b border-border hover:bg-muted/50">
+                      <td className="py-2 px-3 font-medium">
+                        {getNombre(lider)}
+                      </td>
+                      <td className="py-2 px-3 text-muted-foreground">{lider.zona || "—"}</td>
+                      <td className="py-2 px-3 text-muted-foreground">{getTelefono(lider)}</td>
+                      <td className="py-2 px-3 text-xs text-muted-foreground font-mono">
+                        {lat.toFixed(4)}, {lng.toFixed(4)}
+                      </td>
+                      <td className="py-2 px-3">
+                        <Badge
+                          variant={getEstado(lider) === "activo" ? "default" : "secondary"}
+                          className={
+                            getEstado(lider) === "activo" ? "bg-green-600" : "bg-red-600"
+                          }
+                        >
+                          {getEstado(lider) === "activo" ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
