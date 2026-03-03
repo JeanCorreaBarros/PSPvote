@@ -89,6 +89,13 @@ const reportes: Reporte[] = [
       { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfsede?formato=oficio" }
     ]
   },
+  {
+    id: 10, nombre: "Registro por Lider sin cedula Bloqueada", descripcion: "Listado completo de Lider sin cedula Bloqueada", icon: FileText, descargas: [
+      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/dashboard/exportpdfporlidersinbloqueocedulas?formato=oficio" },
+      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelporlidersinbloqueocedulas?formato=oficio" },
+      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipporlidersinbloqueocedulas?formato=oficio" }
+    ]
+  },
 ]
 
 interface Estadisticas {

@@ -1,0 +1,2739 @@
+"use client"
+
+import React, { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
+import { Suspense } from "react"
+import toast from "react-hot-toast"
+
+import { motion, AnimatePresence } from "framer-motion"
+import { Header } from "@/components/header"
+import { HelpButton } from "@/components/help-button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Plus, Search, Edit2, Trash2, MoreVertical, Filter, X, Power, PowerOff, FileSpreadsheet, ShieldCheck, Download } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { votosApi } from "@/lib/api"
+import { logout, getRoleFromToken } from "@/lib/auth"
+import { registroVotosTour, registrarVotanteTour, registrarVotanteModalTour } from "@/lib/tours-config"
+import { useRegistrarVotanteTour } from "@/hooks/use-registrar-votante-tour"
+
+
+interface PuestoVotacion {
+  id: string
+  codUnic: string
+  departamento: string
+  municipio: string
+  puesto: string
+  mujeres: number
+  hombres: number
+  total: number
+  mesas: number
+  comuna: string | null
+  direccion: string
+  latitud: string
+  longitud: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface Recomendado {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface Programa {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface ProgramaOpcion {
+  label: string
+  programaId: string
+  sedeId: string | null
+  tipoVinculacionId: string
+  esPago: boolean
+}
+
+interface CedulaBloqueada {
+  id: string
+  cedula: string
+  activa: boolean
+  override: boolean
+  createdAt: string
+  nombre: string | null
+  telefono: string | null
+  direccion: string | null
+  barrio: string | null
+  lider: string | null
+  programa: string | null
+  tipo: string | null
+  // UI helpers (derived)
+  fechaRegistro?: string
+  isActive?: boolean
+  isDuplicate?: boolean
+}
+
+// Los datos se cargan desde el API
+const initialCedulaBloqueadas: CedulaBloqueada[] = []
+
+// Tabs dinámicos según el rol
+const getAvailableTabs = (role: string | null) => {
+  if (role === "ADMIN") {
+    return ["Todos"]
+  }
+  return ["Todos", "Digitador", "Líder", "Recomendado"]
+}
+
+// Función para traducir errores de Prisma
+const translatePrismaError = (errorMessage: string): string => {
+  if (errorMessage.includes('Unique constraint failed on the constraint: `Votacion_cedula_leaderId_key`')) {
+    return 'Esta cédula ya está registrada para este Líder. No se puede registrar la misma cédula dos veces con el mismo líder'
+  }
+  if (errorMessage.includes('Unique constraint failed')) {
+    return 'Este registro ya existe. Verifique que los datos sean únicos'
+  }
+  if (errorMessage.includes('Foreign key constraint failed')) {
+    return 'No se encontró uno de los registros relacionados. Verifique los datos'
+  }
+  return errorMessage
+}
+
+const Loading = () => null
+
+export default function RegistroCedulasBloqueadasPage() {
+  const searchParams = useSearchParams()
+  const [votantes, setVotantes] = useState<CedulaBloqueada[]>(initialCedulaBloqueadas)
+  const [puestosVotacion, setPuestosVotacion] = useState<PuestoVotacion[]>([])
+  const [recomendados, setRecomendados] = useState<Recomendado[]>([])
+  const [programas, setProgramas] = useState<Programa[]>([])
+  const [programasOpciones, setProgramasOpciones] = useState<ProgramaOpcion[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [activeTab, setActiveTab] = useState("Todos")
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingCedulaBloqueada, setEditingCedulaBloqueada] = useState<CedulaBloqueada | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [searchPuesto, setSearchPuesto] = useState("")
+  const [searchRecomendado, setSearchRecomendado] = useState("")
+  const [searchPrograma, setSearchPrograma] = useState("")
+  const [searchLider, setSearchLider] = useState("")
+  const [showPuestosDropdown, setShowPuestosDropdown] = useState(false)
+  const [showRecomendadosDropdown, setShowRecomendadosDropdown] = useState(false)
+  const [showProgramasDropdown, setShowProgramasDropdown] = useState(false)
+  const [showLiderDropdown, setShowLiderDropdown] = useState(false)
+  const [showConfirmClose, setShowConfirmClose] = useState(false)
+  const [loadingPuestos, setLoadingPuestos] = useState(true)
+  const [loadingRecomendados, setLoadingRecomendados] = useState(true)
+  const [loadingProgramas, setLoadingProgramas] = useState(true)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string>("")
+  const [currentUserLeaderId, setCurrentUserLeaderId] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+  const [toggleStatusId, setToggleStatusId] = useState<string | null>(null)
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false)
+  const [observation, setObservation] = useState("")
+  const [showPuestosModal, setShowPuestosModal] = useState(false)
+  const [searchPuestosModal, setSearchPuestosModal] = useState("")
+  const [selectedPuestoModal, setSelectedPuestoModal] = useState<string | null>(null)
+  const [currentEditingField, setCurrentEditingField] = useState<'form' | 'row' | null>(null)
+  const [currentRowId, setCurrentRowId] = useState<string | null>(null)
+  const [showProgramasModal, setShowProgramasModal] = useState(false)
+  const [searchProgramasModal, setSearchProgramasModal] = useState("")
+  const [selectedProgramaModal, setSelectedProgramaModal] = useState<string | null>(null)
+  const [currentEditingFieldPrograma, setCurrentEditingFieldPrograma] = useState<'form' | 'row' | null>(null)
+  const [currentRowIdPrograma, setCurrentRowIdPrograma] = useState<string | null>(null)
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [duplicateCedulaBloqueadaData, setDuplicateCedulaBloqueadaData] = useState<any>(null)
+  const [duplicateCedula, setDuplicateCedula] = useState<string>("")
+  const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null)
+  // State for Excel operations
+  const [isImporting, setIsImporting] = useState(false)
+  const [isValidating, setIsValidating] = useState(false)
+  const [showImportResultModal, setShowImportResultModal] = useState(false)
+  const [importResult, setImportResult] = useState<{ ok: boolean; totalExcel: number; nuevasInsertadas: number; yaExistian: number } | null>(null)
+
+  const [validatingCedula, setValidatingCedula] = useState(false)
+
+  // Hook para el tour automático del modal
+  useRegistrarVotanteTour(isDialogOpen && !editingCedulaBloqueada)
+
+  // Función para cargar votos desde la API
+  const refetchVotos = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/validaciones/cedulas-bloqueadas`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      if (!response.ok) {
+        throw new Error('Error al cargar las cédulas bloqueadas')
+      }
+      const data = await response.json()
+
+      if (Array.isArray(data)) {
+        const votantesFormateados = data.map((item: any) => ({
+          id: item.id || '',
+          cedula: item.cedula || 'N/A',
+          activa: item.activa ?? true,
+          override: item.override ?? false,
+          createdAt: item.createdAt || '',
+          nombre: item.nombre || null,
+          telefono: item.telefono || null,
+          direccion: item.direccion || null,
+          barrio: item.barrio || null,
+          lider: item.lider || null,
+          programa: item.programa || null,
+          tipo: item.tipo || null,
+          fechaRegistro: item.createdAt ? new Date(item.createdAt).toLocaleDateString('es-CO') : '',
+          isActive: item.activa ?? true,
+          isDuplicate: false,
+        }))
+        setVotantes(votantesFormateados)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar cédulas bloqueadas')
+      toast.error('Error al cargar las cédulas bloqueadas desde el servidor')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    // Obtener el rol del token
+    const role = getRoleFromToken()
+    setUserRole(role)
+
+    // Obtener el nombre del usuario del sessionStorage
+    const userDataStr = sessionStorage.getItem('pspvote_user')
+    if (userDataStr) {
+      try {
+        const userData = JSON.parse(userDataStr)
+        setUserName(userData.leader?.name || userData.username || "sin leader asociado")
+        // Obtener el leaderId del usuario actual (del digitador logueado)
+        setCurrentUserLeaderId(userData.leaderId || userData.leader?.id || null)
+      } catch (err) {
+        console.error('Error al parsear datos del usuario:', err)
+      }
+    }
+  }, [])
+
+  const initialFormData = {
+    nombre1: "",
+    nombre2: "",
+    apellido1: "",
+    apellido2: "",
+    cedula: "",
+    telefono: "",
+    direccion: "",
+    barrio: "",
+    puestoVotacion: "",
+    mesa: "",
+    recommendedById: "",
+    leaderId: "",
+    programaId: "",
+    programaLabel: "",
+    sedeId: null as string | null,
+    tipoVinculacionId: "",
+    esPago: Boolean(false),
+  }
+
+  // Función para generar IDs únicos
+  const generateUniqueId = () => {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  type CedulaBloqueadaRowType = typeof initialFormData & {
+    id: string
+    error?: string
+  }
+
+  const [votanteRows, setVotanteRows] = useState<CedulaBloqueadaRowType[]>([
+    { ...initialFormData, id: generateUniqueId() }
+  ])
+  const [formData, setFormData] = useState(initialFormData)
+
+  // Cargar puestos de votación desde la API
+  useEffect(() => {
+    const fetchPuestos = async () => {
+      try {
+        setLoadingPuestos(true)
+        const token = localStorage.getItem('pspvote_token')
+
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/puestos-votacion`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error('Error al cargar los puestos de votación')
+        }
+
+        const data = await response.json()
+        if (Array.isArray(data)) {
+          setPuestosVotacion(data)
+        }
+      } catch (err) {
+        console.error('Error al cargar puestos:', err)
+        toast.error('Error al cargar los puestos de votación')
+      } finally {
+        setLoadingPuestos(false)
+      }
+    }
+
+    fetchPuestos()
+  }, [])
+
+  // Cargar recomendados desde la API
+  useEffect(() => {
+    const fetchRecomendados = async () => {
+      try {
+        setLoadingRecomendados(true)
+        const token = localStorage.getItem('pspvote_token')
+
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leaders`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error('Error al cargar los recomendados')
+        }
+
+        const data = await response.json()
+        if (Array.isArray(data)) {
+          setRecomendados(data)
+        }
+      } catch (err) {
+        console.error('Error al cargar recomendados:', err)
+        toast.error('Error al cargar los recomendados')
+      } finally {
+        setLoadingRecomendados(false)
+      }
+    }
+
+    fetchRecomendados()
+  }, [])
+
+  // Cargar opciones de programas desde la API
+  useEffect(() => {
+    const fetchProgramasOpciones = async () => {
+      try {
+        setLoadingProgramas(true)
+        const token = localStorage.getItem('pspvote_token')
+
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/programas/opciones`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error('Error al cargar las opciones de programas')
+        }
+
+        const data = await response.json()
+        if (Array.isArray(data)) {
+          setProgramasOpciones(data)
+        }
+      } catch (err) {
+        console.error('Error al cargar opciones de programas:', err)
+        toast.error('Error al cargar las opciones de programas')
+      } finally {
+        setLoadingProgramas(false)
+      }
+    }
+
+    fetchProgramasOpciones()
+  }, [])
+
+  // Cargar votos desde la API al montar el componente
+  useEffect(() => {
+    refetchVotos()
+  }, [])
+
+  // Función para normalizar texto (remover tildes y convertir a minúsculas)
+  const normalizeText = (text: string | undefined | null) => {
+    if (!text) return ''
+    return text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+  }
+
+  // Función para dividir nombres o apellidos si contienen espacio
+  const splitNameFields = (fullName: string) => {
+    const parts = fullName.trim().split(/\s+/)
+    return {
+      first: parts[0] || '',
+      second: parts[1] || '',
+    }
+  }
+
+  const filteredCedulaBloqueadas = votantes.filter((votante: any) => {
+    const normalizedSearch = normalizeText(searchTerm)
+    const matchesSearch =
+      !searchTerm ||
+      (votante.cedula && normalizeText(votante.cedula).includes(normalizedSearch)) ||
+      (votante.nombre && normalizeText(votante.nombre).includes(normalizedSearch)) ||
+      (votante.telefono && normalizeText(votante.telefono).includes(normalizedSearch)) ||
+      (votante.direccion && normalizeText(votante.direccion).includes(normalizedSearch)) ||
+      (votante.barrio && normalizeText(votante.barrio).includes(normalizedSearch)) ||
+      (votante.lider && normalizeText(votante.lider).includes(normalizedSearch)) ||
+      (votante.programa && normalizeText(votante.programa).includes(normalizedSearch)) ||
+      (votante.tipo && normalizeText(votante.tipo).includes(normalizedSearch))
+
+    const matchesTab =
+      activeTab === "Todos" ||
+      (activeTab === "Digitador" && votante.leaderId !== currentUserLeaderId) ||
+      (activeTab === "Líder" && votante.leaderId === currentUserLeaderId) ||
+      (activeTab === "Recomendado" && votante.recommendedById)
+
+    return matchesSearch && matchesTab
+  })
+
+  // Log para debuguear filtros de leaderId
+  useEffect(() => {
+    console.log('🔍 currentUserLeaderId:', currentUserLeaderId)
+    console.log('📊 Total de votantes:', votantes.length)
+
+    const digitadorRegistros = votantes.filter(v => v.leaderId !== currentUserLeaderId)
+    const liderRegistros = votantes.filter(v => v.leaderId === currentUserLeaderId)
+
+    console.log('✅ Registros que NO coinciden (Digitador):', digitadorRegistros.length)
+    console.log('   Detalles:', digitadorRegistros.map(v => ({
+      id: v.id,
+      nombre: `${v.nombre1} ${v.apellido1}`,
+      leaderId: v.leaderId
+    })))
+
+    console.log('❌ Registros que coinciden (Líder):', liderRegistros.length)
+    console.log('   Detalles:', liderRegistros.map(v => ({
+      id: v.id,
+      nombre: `${v.nombre1} ${v.apellido1}`,
+      leaderId: v.leaderId
+    })))
+  }, [currentUserLeaderId, votantes])
+
+
+  // Lógica de paginación
+  const totalPages = Math.ceil(filteredCedulaBloqueadas.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedCedulaBloqueadas = filteredCedulaBloqueadas.slice(startIndex, endIndex)
+
+  // Resetear a página 1 cuando cambia el filtro
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, activeTab])
+
+  // Sincronizar leaderId y recommendedById de la cabecera a todas las filas en modo creación
+  useEffect(() => {
+    if (!editingCedulaBloqueada && isDialogOpen && votanteRows.length > 0) {
+      setVotanteRows(prev => prev.map(row => ({
+        ...row,
+        leaderId: formData.leaderId,
+        recommendedById: formData.recommendedById
+      })))
+    }
+  }, [formData.leaderId, formData.recommendedById, editingCedulaBloqueada, isDialogOpen])
+
+  // Sincronizar programaLabel cuando se carguen los programasOpciones en modo edición
+  useEffect(() => {
+    if (editingCedulaBloqueada && formData.programaId && !formData.programaLabel && programasOpciones.length > 0) {
+      const programaEncontrado = programasOpciones.find(
+        p => p.programaId === formData.programaId &&
+          p.tipoVinculacionId === formData.tipoVinculacionId &&
+          (p.sedeId === formData.sedeId || (p.sedeId === null && formData.sedeId === null))
+      )
+      if (programaEncontrado) {
+        setFormData(prev => ({
+          ...prev,
+          programaLabel: programaEncontrado.label
+        }))
+      }
+    }
+  }, [editingCedulaBloqueada, programasOpciones, formData.programaId, formData.tipoVinculacionId, formData.sedeId])
+
+  const addNewRow = () => {
+    const newId = generateUniqueId()
+    // Nueva fila hereda automáticamente leaderId y recommendedById de la cabecera (formData)
+    setVotanteRows([...votanteRows, {
+      ...initialFormData,
+      id: newId,
+      leaderId: formData.leaderId,
+      recommendedById: formData.recommendedById
+    }])
+  }
+
+  // Función para validar cédulas duplicadas
+  const validateCedula = async (cedula: string, rowId?: string) => {
+    if (!cedula.trim()) {
+      return
+    }
+
+    try {
+      setValidatingCedula(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/cedula/${cedula}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      )
+
+      if (response.ok) {
+        // La API puede devolver dos formas:
+        // 1) Un objeto con { votacion: {...} } cuando hay un registro existente
+        // 2) Un objeto con { message: 'Votación disponible para digitar', votacion: null } cuando está disponible para digitar
+        const data = await response.json()
+
+        // Si la API indica que la votación está disponible para digitar, permitir continuar (no abrir modal)
+        if ((data && data.votacion === null) && typeof data.message === 'string' && data.message.toLowerCase().includes('disponible')) {
+          // Limpiar cualquier estado de duplicado y permitir creación
+          if (rowId) {
+            setVotanteRows(votanteRows.map(row =>
+              row.id === rowId ? { ...row, error: undefined } : row
+            ))
+          }
+          setShowDuplicateModal(false)
+          setDuplicateMessage(null)
+          setDuplicateCedulaBloqueadaData(null)
+        } else {
+          // La cédula existe - mostrar modal de duplicado
+          setDuplicateCedula(cedula)
+          setDuplicateCedulaBloqueadaData(data)
+          setDuplicateMessage(null)
+          console.log('Cédula duplicada encontrada:', data)
+          setShowDuplicateModal(true)
+
+          // Marcar la fila en rojo si se especificó un rowId
+          if (rowId) {
+            setVotanteRows(votanteRows.map(row =>
+              row.id === rowId ? { ...row, error: 'Cédula Registrada' } : row
+            ))
+          }
+        }
+      } else if (response.status === 404) {
+        // La cédula no existe - permitir continuar
+        if (rowId) {
+          setVotanteRows(votanteRows.map(row =>
+            row.id === rowId ? { ...row, error: undefined } : row
+          ))
+        }
+        setShowDuplicateModal(false)
+        setDuplicateMessage(null)
+        setDuplicateCedulaBloqueadaData(null)
+      }
+    } catch (err) {
+      console.error('Error validando cédula:', err)
+      // En caso de error, permitir continuar
+    } finally {
+      setValidatingCedula(false)
+    }
+  }
+
+  const updateRow = (id: string, updates: Partial<CedulaBloqueadaRowType>) => {
+    setVotanteRows(votanteRows.map(row =>
+      row.id === id ? { ...row, ...updates, error: undefined } : row
+    ))
+  }
+
+  const deleteRow = (id: string) => {
+    if (votanteRows.length > 1) {
+      setVotanteRows(votanteRows.filter(row => row.id !== id))
+    } else {
+      toast.error('Debe haber al menos una fila en el formulario')
+    }
+  }
+
+  const handleSubmitRows = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      let failedCount = 0
+      const updatedRows: CedulaBloqueadaRowType[] = []
+
+      // Validar todos los registros
+      for (const row of votanteRows) {
+        if (!row.nombre1 || !row.apellido1 || !row.cedula || !row.telefono || !row.direccion || !row.barrio || !row.puestoVotacion || !row.programaId || !row.leaderId) {
+          updatedRows.push({
+            ...row,
+            error: !row.leaderId ? 'Debe asignar un Líder' : 'Campos incompletos'
+          })
+          failedCount++
+        }
+      }
+
+      // Si hay errores, mostrar y detener
+      if (failedCount > 0) {
+        setVotanteRows(updatedRows.filter(row => row.error))
+        toast.error(`${failedCount} votante(s) con error (marcados en rojo)`)
+        setLoading(false)
+        return
+      }
+
+      // Preparar array de votantes válidos para enviar al bulk
+      const votantesParaEnviar = votanteRows.map(row => {
+        const nombreSplit = splitNameFields(row.nombre1 || '')
+        const apellidoSplit = splitNameFields(row.apellido1 || '')
+
+        return {
+          nombre1: nombreSplit.first,
+          nombre2: nombreSplit.second || null,
+          apellido1: apellidoSplit.first,
+          apellido2: apellidoSplit.second || null,
+          cedula: row.cedula,
+          telefono: row.telefono,
+          direccion: row.direccion,
+          barrio: row.barrio,
+          puestoVotacion: row.puestoVotacion,
+          mesa: row.mesa || null,
+          recommendedById: row.recommendedById || null,
+          leaderId: row.leaderId || null,
+          programaId: row.programaId || null,
+          sedeId: row.sedeId || null,
+          tipoId: row.tipoVinculacionId || null,
+          esPago: row.esPago,
+        }
+      })
+
+      // Enviar al endpoint bulk
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(votantesParaEnviar),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        // Si la API devuelve la votación existente, mostrar modal de duplicado
+        if (errorData && errorData.votacion) {
+          setDuplicateCedula(errorData.votacion.cedula || (votantesParaEnviar && votantesParaEnviar[0]?.cedula) || '')
+          setDuplicateCedulaBloqueadaData(errorData.votacion)
+          setDuplicateMessage(errorData.message || null)
+          // marcar la fila relacionada con el mensaje si corresponde
+          if (errorData.message) {
+            setVotanteRows(prev => prev.map(row => ({ ...row, error: row.cedula === (errorData.votacion?.cedula) ? errorData.message : row.error })))
+          }
+          setShowDuplicateModal(true)
+          setLoading(false)
+          return
+        }
+        const errorMessage = errorData.message || errorData.error || 'Error al registrar votantes'
+        throw new Error(translatePrismaError(errorMessage))
+      }
+
+      const result = await response.json()
+
+      // Limpiar formulario y cerrar modal
+      setVotanteRows([{ ...initialFormData, id: generateUniqueId() }])
+      setIsDialogOpen(false)
+
+      toast.success(`${votantesParaEnviar.length} votante(s) registrado(s) exitosamente`)
+      await refetchVotos()
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al registrar'
+      toast.error(errorMessage)
+      console.error('Error en handleSubmitRows:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    // Validación básica
+    if (!formData.nombre1 || !formData.apellido1 || !formData.cedula || !formData.puestoVotacion) {
+      toast.error('Por favor completa los campos requeridos')
+      return
+    }
+
+    // Validar que el Líder esté asignado
+    if (!formData.leaderId) {
+      toast.error('⚠️ Debe asignar un Líder para continuar')
+      return
+    }
+
+
+    try {
+      setLoading(true)
+
+      // Dividir nombres y apellidos si contienen espacios
+      const nombreSplit = splitNameFields(formData.nombre1 || '')
+      const apellidoSplit = splitNameFields(formData.apellido1 || '')
+
+      const dataToSend = {
+        nombre1: nombreSplit.first,
+        nombre2: nombreSplit.second || undefined,
+        apellido1: apellidoSplit.first,
+        apellido2: apellidoSplit.second || undefined,
+        cedula: formData.cedula || '',
+        telefono: formData.telefono || '',
+        direccion: formData.direccion || '',
+        barrio: formData.barrio || '',
+        puestoVotacion: formData.puestoVotacion || '',
+        mesa: formData.mesa || undefined,
+        recommendedById: formData.recommendedById || undefined,
+        leaderId: formData.leaderId || undefined,
+        programaId: formData.programaId || undefined,
+        sedeId: formData.sedeId ?? null,
+        tipoId: formData.tipoVinculacionId || undefined,
+        esPago: formData.esPago,
+      }
+
+      if (editingCedulaBloqueada) {
+        // Para edición, enviar los cambios al API
+        const token = localStorage.getItem('pspvote_token')
+
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/${editingCedulaBloqueada.id} `, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token} `,
+          },
+          body: JSON.stringify({
+            nombre1: dataToSend.nombre1,
+            nombre2: dataToSend.nombre2 ?? null,
+            apellido1: dataToSend.apellido1,
+            apellido2: dataToSend.apellido2 ?? null,
+            cedula: dataToSend.cedula,
+            telefono: dataToSend.telefono,
+            direccion: dataToSend.direccion,
+            barrio: dataToSend.barrio,
+            puestoVotacion: dataToSend.puestoVotacion,
+            mesa: dataToSend.mesa ?? null,
+            recommendedById: dataToSend.recommendedById ?? null,
+            leaderId: dataToSend.leaderId ?? null,
+            programaId: dataToSend.programaId ?? null,
+            sedeId: dataToSend.sedeId,
+            tipoId: dataToSend.tipoId ?? null,
+            esPago: dataToSend.esPago,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          if (response.status === 401 || errorData.error === 'No autorizado') {
+            throw new Error('El usuario no está autorizado para esta función')
+          }
+          const errorMessage = errorData.message || errorData.error || 'Error al actualizar el votante'
+          throw new Error(translatePrismaError(errorMessage))
+        }
+
+        // Recargar la lista de votantes desde la API
+        await refetchVotos()
+        toast.success('CedulaBloqueada actualizado correctamente')
+      } else {
+        // Para registro nuevo, consumir el endpoint
+        const token = localStorage.getItem('pspvote_token')
+
+        if (!token) {
+          throw new Error('No hay token de autenticación')
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            nombre1: dataToSend.nombre1,
+            nombre2: dataToSend.nombre2 ?? null,
+            apellido1: dataToSend.apellido1,
+            apellido2: dataToSend.apellido2 ?? null,
+            cedula: dataToSend.cedula,
+            telefono: dataToSend.telefono,
+            direccion: dataToSend.direccion,
+            barrio: dataToSend.barrio,
+            puestoVotacion: dataToSend.puestoVotacion,
+            mesa: dataToSend.mesa ?? null,
+            recommendedById: dataToSend.recommendedById ?? null,
+            leaderId: dataToSend.leaderId ?? null,
+            programaId: dataToSend.programaId ?? null,
+            sedeId: dataToSend.sedeId,
+            tipoId: dataToSend.tipoId ?? null,
+            esPago: dataToSend.esPago,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          if (response.status === 401 || errorData.error === 'No autorizado') {
+            throw new Error('El usuario no está autorizado para esta función')
+          }
+          // Si la API devuelve la votación existente, mostrar modal de duplicado
+          if (errorData && errorData.votacion) {
+            setDuplicateCedula(errorData.votacion.cedula || formData.cedula)
+            setDuplicateCedulaBloqueadaData(errorData.votacion)
+            setDuplicateMessage(errorData.message || null)
+            // Si la API envía un mensaje específico, marcar el formulario o la fila con el mensaje
+            if (errorData.message) {
+              // Para edición individual, añadimos message al campo error del row si existe
+              setVotanteRows(prev => prev.map(row => ({ ...row, error: row.cedula === (errorData.votacion?.cedula) ? errorData.message : row.error })))
+            }
+            setShowDuplicateModal(true)
+            setLoading(false)
+            return
+          }
+          const errorMessage = errorData.message || errorData.error || 'Error al registrar el votante'
+          throw new Error(translatePrismaError(errorMessage))
+        }
+
+        const nuevoCedulaBloqueada = await response.json()
+
+        // Recargar la lista de votantes desde la API
+        await refetchVotos()
+        toast.success('¡CedulaBloqueada registrado con éxito!')
+      }
+
+      resetForm()
+      setIsDialogOpen(false)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al registrar'
+      toast.error(errorMessage)
+      console.error('Error en handleSubmit:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEdit = async (votante: CedulaBloqueada) => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      // Obtener los datos completos del votante desde el API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/${votante.id}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('El usuario no está autorizado para esta función')
+        }
+        const errorData = await response.json().catch(() => ({}))
+        if (errorData.error === 'No autorizado') {
+          throw new Error('El usuario no está autorizado para esta función')
+        }
+        throw new Error('Error al cargar los datos del votante')
+      }
+
+      const votanteData = await response.json()
+
+      setEditingCedulaBloqueada(votante)
+      // Asegurar que tipoVinculacionId siempre venga del tipoId del backend
+      const tipoVinculacionIdValue = votanteData.tipoId || votanteData.tipoVinculacionId || ""
+
+      // Buscar el label del programa que corresponde a esta combinación
+      const programaEncontrado = programasOpciones.find(
+        p => p.programaId === votanteData.programaId &&
+          p.tipoVinculacionId === votanteData.tipoId &&
+          (p.sedeId === votanteData.sedeId || (p.sedeId === null && votanteData.sedeId === null))
+      )
+      const programaLabelValue = programaEncontrado ? programaEncontrado.label : ""
+
+      setFormData({
+        nombre1: votanteData.nombre2 ? `${votanteData.nombre1} ${votanteData.nombre2}` : (votanteData.nombre1 || ""),
+        nombre2: "",
+        apellido1: votanteData.apellido2 ? `${votanteData.apellido1} ${votanteData.apellido2}` : (votanteData.apellido1 || ""),
+        apellido2: "",
+        cedula: votanteData.cedula || "",
+        telefono: votanteData.telefono || "",
+        direccion: votanteData.direccion || "",
+        barrio: votanteData.barrio || "",
+        puestoVotacion: votanteData.puestoVotacion || "",
+        mesa: votanteData.mesa || "",
+        recommendedById: votanteData.recommendedById || "",
+        leaderId: votanteData.leaderId || "",
+        programaId: votanteData.programaId || "",
+        programaLabel: programaLabelValue,
+        sedeId: votanteData.sedeId || null,
+        tipoVinculacionId: tipoVinculacionIdValue,
+        esPago: votanteData.esPago || false,
+      })
+
+      // Cargar los nombres de los campos seleccionados
+      const puestoSelec = puestosVotacion.find(p => p.id === votanteData.puestoVotacion)
+      if (puestoSelec) {
+        setSearchPuesto(puestoSelec.puesto)
+      }
+
+      const recomendadoSelec = recomendados.find(r => r.id === votanteData.recommendedById)
+      if (recomendadoSelec) {
+        setSearchRecomendado(recomendadoSelec.name)
+      }
+
+      const liderSelec = recomendados.find(r => r.id === votanteData.leaderId)
+      if (liderSelec) {
+        setSearchLider(liderSelec.name)
+      }
+
+
+
+      setIsDialogOpen(true)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar los datos'
+      toast.error(errorMessage)
+      console.error('Error en handleEdit:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = (id: string) => {
+    setVotantes(votantes.filter((v) => v.id !== id))
+  }
+
+  // Toggle a cédula bloqueada via /api/validaciones/cedulas-bloqueadas/{id}/toggl
+  const handleToggleCedulaBloqueada = async (id: string) => {
+    try {
+      const token = localStorage.getItem('pspvote_token')
+      if (!token) throw new Error('No hay token de autenticación')
+      const toastId = toast.loading('Actualizando estado...', { position: 'top-right' })
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/validaciones/cedulas-bloqueadas/${id}/toggle`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      if (!response.ok) throw new Error('Error al actualizar el estado')
+      toast.success('Estado actualizado correctamente', { id: toastId, duration: 4000 })
+      await refetchVotos()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      toast.error(`Error: ${msg}`, { duration: 4000 })
+    }
+  }
+
+  // Validate cedulas via xlsx upload - returns xlsx file
+  const handleValidarCedulas = async (file: File) => {
+    try {
+      setIsValidating(true)
+      const token = localStorage.getItem('pspvote_token')
+      if (!token) throw new Error('No hay token de autenticación')
+      const formDataFile = new FormData()
+      formDataFile.append('file', file)
+      const toastId = toast.loading('Validando cédulas...', { position: 'top-right' })
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/validaciones/excel/validar-cedulas`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formDataFile,
+      })
+      if (!response.ok) throw new Error('Error al validar el archivo')
+      // Response is an xlsx file - trigger download
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'cedulas_validadas.xlsx'
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Archivo de validación descargado', { id: toastId, duration: 4000 })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      toast.error(`Error al validar: ${msg}`, { duration: 4000 })
+    } finally {
+      setIsValidating(false)
+    }
+  }
+
+  // Import cedulas via xlsx upload
+  const handleImportarCedulas = async (file: File) => {
+    try {
+      setIsImporting(true)
+      const token = localStorage.getItem('pspvote_token')
+      if (!token) throw new Error('No hay token de autenticación')
+      const formDataFile = new FormData()
+      formDataFile.append('file', file)
+      const toastId = toast.loading('Importando cédulas...', { position: 'top-right' })
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/validaciones/excel/importar-cedulas`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formDataFile,
+      })
+      if (!response.ok) throw new Error('Error al importar el archivo')
+      const result = await response.json()
+      setImportResult(result)
+      setShowImportResultModal(true)
+      toast.success('Importación completada', { id: toastId, duration: 4000 })
+      await refetchVotos()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido'
+      toast.error(`Error al importar: ${msg}`, { duration: 4000 })
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
+  const handleToggleStatus = async (id: string) => {
+    let toastId: string | undefined
+    try {
+      setIsTogglingStatus(true)
+      const token = localStorage.getItem('pspvote_token')
+
+      if (!token) {
+        throw new Error('No hay token de autenticación')
+      }
+
+      // Validar si se requiere observation (solo cuando se desactiva)
+      const votante = votantes.find(v => v.id === id)
+      if (votante?.isActive && !observation.trim()) {
+        toast.error("Por favor ingresa un comentario para desactivar el registro", {
+          duration: 4000,
+          position: 'top-right',
+        })
+        setIsTogglingStatus(false)
+        return
+      }
+
+      toastId = toast.loading("Actualizando estado...", {
+        position: 'top-right',
+      })
+
+      const body = votante?.isActive ? { observation } : {}
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/votaciones/${id}/toggle-status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al actualizar el estado del registro')
+      }
+
+      const data = await response.json()
+
+      // Actualizar el votante en el estado
+      refetchVotos()
+      setToggleStatusId(null)
+      setObservation("")
+
+      const statusMessage = data.isActive ? "Registro activado exitosamente" : "Registro desactivado exitosamente"
+      toast.success(statusMessage, {
+        id: toastId,
+        duration: 4000,
+      })
+    } catch (error: any) {
+      const errorMessage = error.message || "Error desconocido"
+      if (toastId) {
+        toast.error(`Error al actualizar estado: ${errorMessage}`, {
+          id: toastId,
+          duration: 4000,
+        })
+      } else {
+        toast.error(`Error al actualizar estado: ${errorMessage}`, {
+          duration: 4000,
+        })
+      }
+    } finally {
+      setIsTogglingStatus(false)
+    }
+  }
+
+  // Función para detectar si hay cambios sin guardar
+  const hasUnsavedChanges = () => {
+    if (editingCedulaBloqueada) return false // Si está editando, no mostrar confirmación
+
+    return (
+      formData.nombre1 !== "" ||
+      formData.apellido1 !== "" ||
+      formData.cedula !== "" ||
+      formData.telefono !== "" ||
+      formData.direccion !== "" ||
+      formData.barrio !== "" ||
+      formData.puestoVotacion !== "" ||
+      formData.mesa !== "" ||
+      formData.recommendedById !== "" ||
+      formData.leaderId !== "" ||
+      formData.programaId !== "" ||
+      formData.sedeId !== "" ||
+      formData.tipoVinculacionId !== "" ||
+      formData.esPago !== false
+    )
+  }
+
+  // Función para manejar el cierre del modal
+  const handleCloseDialog = (open: boolean) => {
+    if (!open && hasUnsavedChanges()) {
+      setShowConfirmClose(true)
+    } else {
+      setIsDialogOpen(open)
+      if (!open) resetForm()
+    }
+  }
+
+  // Función para confirmar el cierre sin guardar
+  const handleConfirmClose = () => {
+    setShowConfirmClose(false)
+    setIsDialogOpen(false)
+    resetForm()
+  }
+
+  const resetForm = () => {
+    setFormData(initialFormData)
+    // Primera fila hereda leaderId y recommendedById si ya estaban seleccionados
+    setVotanteRows([{
+      ...initialFormData,
+      id: generateUniqueId(),
+      leaderId: formData.leaderId,
+      recommendedById: formData.recommendedById
+    }])
+    setEditingCedulaBloqueada(null)
+    setSearchPuesto("")
+    setSearchRecomendado("")
+    setSearchPrograma("")
+    setSearchLider("")
+  }
+
+  const puestosFiltered = puestosVotacion.filter((puesto) =>
+    (puesto.puesto || '').toLowerCase().includes(searchPuesto.toLowerCase())
+  )
+
+  const recomendadosFiltered = recomendados.filter((rec) =>
+    (rec.name || '').toLowerCase().includes(searchRecomendado.toLowerCase())
+  )
+
+  const programasOpsFiltered = programasOpciones.filter((prog) =>
+    (prog.label || '').toLowerCase().includes(searchPrograma.toLowerCase())
+  )
+
+  const puestoSeleccionado = puestosVotacion.find((p) => p.id === formData.puestoVotacion)
+
+  const recomendadoSeleccionado = recomendados.find((r) => r.id === formData.recommendedById)
+
+  const programaSeleccionado = programasOpciones.find((p) => p.programaId === formData.programaId && p.tipoVinculacionId === formData.tipoVinculacionId)
+
+  const getStatusBadge = (estado: CedulaBloqueada["estado"], isDuplicate?: boolean) => {
+    const styles = {
+      verificado: "bg-accent/10 text-accent border-accent/20",
+      registrado: isDuplicate ? "bg-red-100 text-red-700 border-red-300" : "bg-primary/10 text-primary border-primary/20",
+      pendiente: "bg-chart-3/10 text-chart-3 border-chart-3/20",
+    }
+    const labels = {
+      verificado: "Verificado",
+      registrado: isDuplicate ? "Registrado/Duplicado" : "Registrado",
+      pendiente: "Pendiente",
+    }
+    return (
+      <Badge variant="outline" className={styles[estado]}>
+        {labels[estado]}
+      </Badge>
+    )
+  }
+
+  return (
+    <div className="min-h-screen">
+      {/* Overlay de validación de cédulas */}
+      {isValidating && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-5 rounded-2xl border border-border bg-background/95 p-10 shadow-2xl">
+            {/* Anillo giratorio + ícono centrado */}
+            <div className="relative flex items-center justify-center w-20 h-20">
+              <svg
+                className="absolute inset-0 w-full h-full animate-spin"
+                viewBox="0 0 80 80"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <circle
+                  cx="40" cy="40" r="35"
+                  stroke="currentColor"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray="110 110"
+                  strokeDashoffset="40"
+                  className="text-primary"
+                />
+              </svg>
+              <ShieldCheck className="w-9 h-9 text-primary" />
+            </div>
+
+            {/* Texto */}
+            <div className="flex flex-col items-center gap-1 text-center">
+              <p className="text-lg font-semibold text-foreground">Validando cédulas…</p>
+              <p className="text-sm text-muted-foreground">
+                Procesando el archivo Excel.<br />Esto puede tomar unos segundos.
+              </p>
+            </div>
+
+            {/* Barra de progreso indeterminada */}
+            <div className="w-64 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full"
+                style={{
+                  animation: "validating-bar 1.4s ease-in-out infinite",
+                  width: "40%",
+                }}
+              />
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes validating-bar {
+              0%   { transform: translateX(-100%); }
+              100% { transform: translateX(270%); }
+            }
+          `}</style>
+        </div>
+      )}
+      <Header title="Registro Cédulas Bloqueadas" tours={[
+        { name: "Guía de Registro Cédulas Bloqueadas", steps: registroVotosTour },
+      ]} />
+
+      <div className="p-6">
+        <Card className="border-border">
+          <CardHeader className="border-b border-border">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <CardTitle id="registro-titulo" className="text-foreground text-xl">Listado de Cédulas Bloqueadas</CardTitle>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div id="registro-busqueda" className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Buscar por cédula, nombre, teléfono, dirección, barrio, líder, programa, tipo..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 h-9 bg-muted/50"
+                  />
+                </div>
+
+                <Button variant="outline" size="sm" className="gap-2 hidden bg-transparent">
+                  <Filter className="w-4 h-4" />
+                  Filtros
+                </Button>
+
+                {/* Excel Validate Button */}
+                <label htmlFor="validar-xlsx" className="cursor-pointer">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={isValidating}
+                  >
+                    <span>
+                      <ShieldCheck className="w-4 h-4" />
+                      {isValidating ? 'Validando...' : 'Validar Cédulas'}
+                    </span>
+                  </Button>
+                  <input
+                    id="validar-xlsx"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) { handleValidarCedulas(file); e.target.value = '' }
+                    }}
+                  />
+                </label>
+
+                {/* Excel Import Button */}
+                <label htmlFor="importar-xlsx" className="cursor-pointer">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-green-500 text-green-600 hover:bg-green-50"
+                    disabled={isImporting}
+                  >
+                    <span>
+                      <FileSpreadsheet className="w-4 h-4" />
+                      {isImporting ? 'Importando...' : 'Importar Excel'}
+                    </span>
+                  </Button>
+                  <input
+                    id="importar-xlsx"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) { handleImportarCedulas(file); e.target.value = '' }
+                    }}
+                  />
+                </label>
+
+                <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
+                  <DialogTrigger asChild>
+                    <Button id="registro-nuevo-btn" size="sm" className="gap-2 hidden w-full md:w-auto bg-primary text-primary-foreground">
+                      <Plus className="w-4 h-4" />
+                      Nuevo Registro
+                    </Button>
+                  </DialogTrigger>
+
+                  {/* Modal personalizado */}
+                  {isDialogOpen && (
+                    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+                      <div className="bg-background border border-border rounded-lg  w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="flex flex-col gap-3 border-b border-border p-6 pb-4 sticky top-0 bg-background">
+
+                          {/* HEADER — NO SE TOCA */}
+                          <div className="flex flex-row items-center justify-between">
+                            <h2 className="text-lg font-semibold text-foreground">
+                              {editingCedulaBloqueada ? "Editar Cédula Bloqueada" : "Registrar Nueva Cédula Bloqueada"}
+                            </h2>
+
+                            <div className="flex gap-2 items-center">
+                              {!editingCedulaBloqueada && (
+                                <HelpButton tours={[{ name: "Guía del Modal", steps: registrarVotanteModalTour }]} />
+                              )}
+                              <button
+                                onClick={() => {
+                                  if (editingCedulaBloqueada || !hasUnsavedChanges()) {
+                                    resetForm()
+                                    setIsDialogOpen(false)
+                                  } else {
+                                    setShowConfirmClose(true)
+                                  }
+                                }}
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                title="Cerrar"
+                              >
+                                <X className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* FILA: IZQUIERDA (RJ) | CENTRO (RECOMENDADO) | DERECHA (LÍDER) */}
+                          <div className="flex flex-col lg:flex-row gap-4 items-start w-full">
+
+                            {/* IZQUIERDA */}
+                            {userName && (
+                              <div
+                                className="flex items-center gap-2 lg:w-1/3"
+                                id="form-registrando-para"
+                              >
+                                <Avatar className="w-8 h-8">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                                    {(userName || "")
+                                      .split(" ")
+                                      .map(n => n.charAt(0))
+                                      .join("")
+                                      .substring(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+
+                                <div>
+                                  <p className="text-xs text-muted-foreground font-medium">
+                                    Registrando <span className="font-bold">Digitador</span>:
+                                  </p>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {userName || "sin líder asociado"}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Centro - LÍDER */}
+                            <div className="space-y-2 lg:w-1/3" id="form-lider">
+                              <Label htmlFor="liderId">Asignar Líder</Label>
+
+                              <div id="form-lider-input" className="relative">
+                                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                                  <Search className="w-4 h-4 text-muted-foreground" />
+                                  <input
+                                    id="liderId"
+                                    type="text"
+                                    placeholder="Buscar Líder... (Enter para crear nuevo)"
+                                    value={searchLider}
+                                    onChange={(e) => setSearchLider(e.target.value)}
+                                    onFocus={() => setShowLiderDropdown(true)}
+                                    onBlur={() => setTimeout(() => setShowLiderDropdown(false), 200)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter' && searchLider.trim()) {
+                                        console.log('🔍 Enter presionado - Buscando Líder:', searchLider)
+                                        const existe = recomendados.some(r => r.name.toLowerCase() === searchLider.toLowerCase())
+
+                                        console.log('📋 ¿Existe en la lista?:', existe)
+
+                                        if (!existe) {
+                                          try {
+                                            console.log('✨ Creando nuevo líder:', searchLider)
+                                            setLoading(true)
+                                            const token = localStorage.getItem('pspvote_token')
+
+                                            if (!token) {
+                                              throw new Error('No hay token de autenticación')
+                                            }
+
+                                            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leaders`, {
+                                              method: 'POST',
+                                              headers: {
+                                                'Content-Type': 'application/json',
+                                                'Authorization': `Bearer ${token}`,
+                                              },
+                                              body: JSON.stringify({
+                                                name: searchLider.trim(),
+                                                phone: "0000000000",
+                                                address: "0000000000"
+                                              }),
+                                            })
+
+                                            if (!response.ok) {
+                                              const errorData = await response.json().catch(() => ({}))
+                                              throw new Error(errorData.message || 'Error al crear el líder')
+                                            }
+
+                                            const nuevoLider = await response.json()
+                                            const liderData = nuevoLider.leader
+
+                                            if (!liderData || !liderData.id) {
+                                              throw new Error('El servidor no devolvió un ID válido para el nuevo líder')
+                                            }
+
+                                            setRecomendados(prev => [...prev, liderData])
+                                            setFormData(prev => ({ ...prev, leaderId: liderData.id }))
+                                            // Aplicar a todas las filas de votanteRows
+                                            setVotanteRows(prev => prev.map(row => ({ ...row, leaderId: liderData.id })))
+                                            setSearchLider(liderData.name)
+                                            setShowLiderDropdown(false)
+
+                                            toast.success(`¡Líder "${liderData.name}" creado y asignado a todos los registros!`)
+                                          } catch (err) {
+                                            const errorMessage = err instanceof Error ? err.message : 'Error al crear el líder'
+                                            console.error('❌ Error al crear líder:', errorMessage, err)
+                                            toast.error(errorMessage)
+                                          } finally {
+                                            setLoading(false)
+                                          }
+                                        }
+                                      }
+                                    }}
+                                    className="flex-1 bg-transparent outline-none text-sm"
+                                  />
+                                  {searchLider && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSearchLider("")
+                                        setShowLiderDropdown(true)
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {showLiderDropdown && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                                    {recomendados.filter(r => r.name.toLowerCase().includes(searchLider.toLowerCase())).length > 0 ? (
+                                      recomendados.filter(r => r.name.toLowerCase().includes(searchLider.toLowerCase())).map((lider) => (
+                                        <button
+                                          key={lider.id}
+                                          type="button"
+                                          onMouseDown={() => {
+                                            // Aplicar a formData (para edición individual)
+                                            setFormData({ ...formData, leaderId: lider.id })
+                                            // Aplicar a todas las filas de votanteRows (para creación masiva)
+                                            setVotanteRows(prev => prev.map(row => ({ ...row, leaderId: lider.id })))
+                                            setSearchLider(lider.name)
+                                            setShowLiderDropdown(false)
+                                          }}
+                                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                                        >
+                                          {lider.name}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                        No se encontraron líderes
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Derecha - RECOMENDADO */}
+                            <div className="space-y-2 lg:w-1/3" id="form-leader">
+                              <Label htmlFor="recommendedById">Recomendado por</Label>
+
+                              <div id="form-recomendado" className="relative">
+                                <div className="flex items-center gap-2 border-2 border-input rounded-md px-3 py-2 bg-background focus-within:border-primary transition-colors">
+                                  <Search className="w-4 h-4 text-muted-foreground" />
+                                  <input
+                                    id="recommendedById"
+                                    type="text"
+                                    placeholder="Buscar Recomendado... (Enter para crear nuevo)"
+                                    value={searchRecomendado}
+                                    onChange={(e) => setSearchRecomendado(e.target.value)}
+                                    onFocus={() => setShowRecomendadosDropdown(true)}
+                                    onBlur={() => setTimeout(() => setShowRecomendadosDropdown(false), 200)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter' && searchRecomendado.trim()) {
+                                        console.log('🔍 Enter presionado - Buscando:', searchRecomendado)
+                                        const existe = recomendadosFiltered.some(r => r.name.toLowerCase() === searchRecomendado.toLowerCase())
+
+                                        console.log('📋 ¿Existe en la lista?:', existe)
+
+                                        if (!existe) {
+                                          try {
+                                            console.log('✨ Creando nuevo líder:', searchRecomendado)
+                                            setLoading(true)
+                                            const token = localStorage.getItem('pspvote_token')
+
+                                            if (!token) {
+                                              throw new Error('No hay token de autenticación')
+                                            }
+
+                                            const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/leaders`, {
+                                              method: 'POST',
+                                              headers: {
+                                                'Content-Type': 'application/json',
+                                                'Authorization': `Bearer ${token}`,
+                                              },
+                                              body: JSON.stringify({
+                                                name: searchRecomendado.trim(),
+                                                phone: "0000000000",
+                                                address: "0000000000"
+                                              }),
+                                            })
+
+                                            if (!response.ok) {
+                                              const errorData = await response.json().catch(() => ({}))
+                                              throw new Error(errorData.message || 'Error al crear el líder')
+                                            }
+
+                                            const nuevoLider = await response.json()
+
+                                            // Extraer el líder del response (estructura anidada)
+                                            const liderData = nuevoLider.leader
+
+                                            console.log('✅ Líder creado exitosamente:', liderData)
+                                            console.log('🆔 ID del nuevo líder:', liderData.id)
+
+                                            if (!liderData || !liderData.id) {
+                                              throw new Error('El servidor no devolvió un ID válido para el nuevo líder')
+                                            }
+
+                                            // Agregar el nuevo líder a la lista
+                                            setRecomendados(prev => [...prev, liderData])
+                                            console.log('📝 Añadido a lista de recomendados')
+
+                                            // Actualizar el formulario con el nuevo líder
+                                            setFormData(prev => {
+                                              const updated = { ...prev, recommendedById: liderData.id }
+                                              console.log('📌 recommendedById asignado a:', liderData.id)
+                                              console.log('📦 FormData actualizado:', updated)
+                                              return updated
+                                            })
+
+                                            // Aplicar a todas las filas de votanteRows
+                                            setVotanteRows(prev => prev.map(row => ({ ...row, recommendedById: liderData.id })))
+                                            console.log('📋 recommendedById aplicado a todas las filas')
+
+                                            // Actualizar el search para mostrar el nombre del nuevo líder
+                                            setSearchRecomendado(liderData.name)
+                                            console.log('🏷️ Campo de búsqueda actualizado a:', liderData.name)
+
+                                            // Cerrar el dropdown
+                                            setShowRecomendadosDropdown(false)
+
+                                            toast.success(`¡Líder "${liderData.name}" creado y asignado a todos los registros!`)
+                                          } catch (err) {
+                                            const errorMessage = err instanceof Error ? err.message : 'Error al crear el líder'
+                                            console.error('❌ Error al crear líder:', errorMessage, err)
+                                            toast.error(errorMessage)
+                                          } finally {
+                                            setLoading(false)
+                                          }
+                                        }
+                                      }
+                                    }}
+                                    className="flex-1 bg-transparent outline-none text-sm"
+                                  />
+                                  {searchRecomendado && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSearchRecomendado("")
+                                        setShowRecomendadosDropdown(true)
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {showRecomendadosDropdown && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 border border-border rounded-md bg-background shadow-lg z-50 max-h-64 overflow-y-auto">
+                                    {recomendadosFiltered.length > 0 ? (
+                                      recomendadosFiltered.map((rec) => (
+                                        <button
+                                          key={rec.id}
+                                          type="button"
+                                          onMouseDown={() => {
+                                            // Aplicar a formData (para edición individual)
+                                            setFormData({ ...formData, recommendedById: rec.id })
+                                            // Aplicar a todas las filas de votanteRows (para creación masiva)
+                                            setVotanteRows(prev => prev.map(row => ({ ...row, recommendedById: rec.id })))
+                                            setSearchRecomendado(rec.name)
+                                            setShowRecomendadosDropdown(false)
+                                          }}
+                                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                                        >
+                                          {rec.name}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                                        No se encontraron recomendados
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+
+
+                        {/* MODO EDICIÓN: Formulario con estructura horizontal */}
+                        {editingCedulaBloqueada ? (
+                          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                            {/* Tabla horizontal para editar un votante */}
+                            <div className="overflow-x-auto border border-border rounded-lg">
+                              <table className="w-full text-sm table-fixed">
+                                <colgroup>
+                                  <col className="w-[120px]" />
+                                  <col className="w-[120px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[130px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[130px]" />
+                                  <col className="w-[140px]" />
+                                  <col className="w-[140px]" />
+                                </colgroup>
+                                <thead>
+                                  <tr className="bg-muted/50 border-b border-border">
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Nombres</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Apellidos</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Cédula</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Teléfono</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Dirección</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Barrio</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Puesto</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Mesa</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Programa</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <tr className="border-b border-border hover:bg-muted/50">
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Nombres"
+                                        value={formData.nombre1}
+                                        onChange={(e) => setFormData({ ...formData, nombre1: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[120px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Apellidos"
+                                        value={formData.apellido1}
+                                        onChange={(e) => setFormData({ ...formData, apellido1: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[120px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Cédula"
+                                        value={formData.cedula}
+                                        onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[110px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Teléfono"
+                                        value={formData.telefono}
+                                        onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[110px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Dirección"
+                                        value={formData.direccion}
+                                        onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[130px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="Barrio"
+                                        value={formData.barrio}
+                                        onChange={(e) => setFormData({ ...formData, barrio: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[110px]"
+                                      />
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCurrentEditingField('form')
+                                          setCurrentRowId(null)
+                                          setSearchPuestosModal("")
+                                          setSelectedPuestoModal(formData.puestoVotacion)
+                                          setShowPuestosModal(true)
+                                        }}
+                                        className="h-8 text-xs w-full max-w-[130px] px-2 py-1 border border-input rounded-md bg-background hover:bg-muted/50 text-left truncate"
+                                      >
+                                        {puestosVotacion.find(p => p.id === formData.puestoVotacion)?.puesto || 'Sel.'}
+                                      </button>
+                                    </td>
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <Input
+                                        type="text"
+                                        placeholder="mesa"
+                                        value={formData.mesa}
+                                        onChange={(e) => setFormData({ ...formData, mesa: e.target.value })}
+                                        className="h-8 text-xs w-full max-w-[110px]"
+
+                                      />
+                                    </td>
+
+                                    <td className="px-2 py-2 overflow-hidden">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCurrentEditingFieldPrograma('form')
+                                          setCurrentRowIdPrograma(null)
+                                          setSearchProgramasModal("")
+                                          setSelectedProgramaModal(formData.programaLabel)
+                                          setShowProgramasModal(true)
+                                        }}
+                                        className="h-8 text-xs w-full max-w-[140px] px-2 py-1 border border-input rounded-md bg-background hover:bg-muted/50 text-left truncate"
+                                      >
+                                        {programasOpciones.find(p => p.label === formData.programaLabel)?.label || 'Sel.'}
+                                      </button>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Campos adicionales debajo de la tabla */}
+                            <div className="space-y-4 hidden pt-4 border-t border-border">
+                              {/* Recomendado Por y Líder en horizontal */}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="edit-recomendado">Recomendado Por</Label>
+                                  <Select
+                                    value={formData.recommendedById}
+                                    onValueChange={(value) => {
+                                      const rec = recomendados.find(r => r.id === value)
+                                      setFormData({ ...formData, recommendedById: value })
+                                      if (rec) setSearchRecomendado(rec.name)
+                                    }}
+                                  >
+                                    <SelectTrigger id="edit-recomendado" className="h-8 text-xs">
+                                      <SelectValue placeholder="Seleccionar..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {recomendados.map((rec) => (
+                                        <SelectItem key={rec.id} value={rec.id}>
+                                          {rec.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label htmlFor="edit-lider">Líder</Label>
+                                  <Select
+                                    value={formData.leaderId}
+                                    onValueChange={(value) => {
+                                      const lider = recomendados.find(r => r.id === value)
+                                      setFormData({ ...formData, leaderId: value })
+                                      if (lider) setSearchLider(lider.name)
+                                    }}
+                                  >
+                                    <SelectTrigger id="edit-lider" className="h-8 text-xs">
+                                      <SelectValue placeholder="Seleccionar..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {recomendados.map((lider) => (
+                                        <SelectItem key={lider.id} value={lider.id}>
+                                          {lider.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+
+                              {/* Es Pago */}
+                              <div className="flex items-center gap-2">
+                                <input
+                                  id="edit-pago"
+                                  type="checkbox"
+                                  checked={formData.esPago}
+                                  onChange={(e) => setFormData({ ...formData, esPago: e.target.checked })}
+                                  className="rounded border-border"
+                                />
+                                <Label htmlFor="edit-pago" className="text-sm">Es Pago</Label>
+                              </div>
+                            </div>
+
+                            {/* Botones */}
+                            <div className="flex justify-end gap-3 pt-4">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  resetForm()
+                                  setIsDialogOpen(false)
+                                }}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button
+                                type="submit"
+                                className="bg-primary text-primary-foreground"
+                                disabled={loading}
+                              >
+                                {loading ? "Guardando..." : "Guardar Cambios"}
+                              </Button>
+                            </div>
+                          </form>
+                        ) : (
+                          <form onSubmit={handleSubmitRows} className="p-6 space-y-4 flex flex-col h-full">
+                            {/* Tabla horizontal */}
+                            <div className="overflow-x-auto border border-border rounded-lg flex-1 overflow-y-auto max-h-[300px]">
+                              <table className="w-full text-sm table-fixed">
+                                <colgroup>
+                                  <col className="w-[120px]" />
+                                  <col className="w-[120px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[130px]" />
+                                  <col className="w-[110px]" />
+                                  <col className="w-[130px]" />
+                                  <col className="w-[140px]" />
+                                  <col className="w-[60px]" />
+                                  <col className="w-[60px]" />
+                                </colgroup>
+                                <thead>
+                                  <tr className="bg-muted/50 border-b border-border">
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Nombres</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Apellidos</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Cédula</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Teléfono</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Dirección</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Barrio</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Puesto</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Mesa</th>
+                                    <th className="px-2 py-2 text-left font-medium text-xs">Programa</th>
+                                    <th className="px-2 py-2 text-center font-medium text-xs">Acciones</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  <AnimatePresence mode="popLayout">
+                                    {votanteRows.map((row, index) => {
+                                      return (
+                                        <motion.tr
+                                          key={`${row.id}-${index}`}
+                                          initial={{ opacity: 0, y: 10 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          exit={{ opacity: 0, y: -10 }}
+                                          className={`border-b border-border ${row.error ? 'bg-red-50/50' : 'hover:bg-muted/50'
+                                            }`}
+                                        >
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Nombres"
+                                              value={row.nombre1}
+                                              onChange={(e) => updateRow(row.id, { nombre1: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[120px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Apellidos"
+                                              value={row.apellido1}
+                                              onChange={(e) => updateRow(row.id, { apellido1: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[120px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Cédula"
+                                              value={row.cedula}
+                                              onChange={(e) => updateRow(row.id, { cedula: e.target.value })}
+                                              onBlur={(e) => {
+                                                const cedula = e.target.value.trim()
+                                                if (cedula) {
+                                                  validateCedula(cedula, row.id)
+                                                }
+                                              }}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Teléfono"
+                                              value={row.telefono}
+                                              onChange={(e) => updateRow(row.id, { telefono: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Dirección"
+                                              value={row.direccion}
+                                              onChange={(e) => updateRow(row.id, { direccion: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[130px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="Barrio"
+                                              value={row.barrio}
+                                              onChange={(e) => updateRow(row.id, { barrio: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setCurrentEditingField('row')
+                                                setCurrentRowId(row.id)
+                                                setSearchPuestosModal("")
+                                                setSelectedPuestoModal(row.puestoVotacion)
+                                                setShowPuestosModal(true)
+                                              }}
+                                              className={`h-8 text-xs w-full max-w-[130px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${row.error ? 'border-red-400' : 'border-input'
+                                                }`}
+                                            >
+                                              {puestosVotacion.find(p => p.id === row.puestoVotacion)?.puesto || 'Sel.'}
+                                            </button>
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <Input
+                                              type="text"
+                                              placeholder="mesa"
+                                              value={row.mesa}
+                                              onChange={(e) => updateRow(row.id, { mesa: e.target.value })}
+                                              className={`h-8 text-xs w-full max-w-[110px] ${row.error ? 'border-red-400' : ''
+                                                }`}
+                                            />
+                                          </td>
+                                          <td className="px-2 py-2 overflow-hidden">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setCurrentEditingFieldPrograma('row')
+                                                setCurrentRowIdPrograma(row.id)
+                                                setSearchProgramasModal("")
+                                                setSelectedProgramaModal(row.programaLabel)
+                                                setShowProgramasModal(true)
+                                              }}
+                                              className={`h-8 text-xs w-full max-w-[140px] px-2 py-1 border rounded-md bg-background hover:bg-muted/50 text-left truncate ${row.error ? 'border-red-400' : 'border-input'
+                                                }`}
+                                            >
+                                              {programasOpciones.find(p => p.label === row.programaLabel)?.label || 'Sel.'}
+                                            </button>
+                                          </td>
+                                          <td className="px-2 py-2 text-center overflow-hidden">
+                                            <button
+                                              type="button"
+                                              onClick={() => deleteRow(row.id)}
+                                              className="text-muted-foreground cursor-pointer  hover:text-red-600"
+                                              title="Eliminar"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </button>
+                                          </td>
+                                        </motion.tr>
+                                      )
+                                    })}
+                                  </AnimatePresence>
+                                </tbody>
+                              </table>
+                            </div>
+
+                            {/* Mostrar errores debajo de la tabla */}
+                            {votanteRows.some(r => r.error) && (
+                              <div className="p-3 bg-red-50 border border-red-200 rounded-lg mt-4">
+                                <p className="text-sm font-semibold text-red-700 mb-2">Errores encontrados:</p>
+                                {votanteRows.map((row) => row.error && (
+                                  <div key={row.id} className="text-xs text-red-600 mb-1">
+                                    • <strong>{row.nombre1} {row.apellido1}</strong>: {row.error}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Botón para agregar fila */}
+                            <div className="flex justify-between items-center pt-4 border-t border-border mt-4">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={addNewRow}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Agregar Fila
+                              </Button>
+
+                              {/* Botones de envío */}
+                              <div className="flex gap-3">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="cursor-pointer "
+                                  onClick={() => {
+                                    if (!hasUnsavedChanges()) {
+                                      resetForm()
+                                      setIsDialogOpen(false)
+                                    } else {
+                                      setShowConfirmClose(true)
+                                    }
+                                  }}
+                                >
+                                  Cancelar
+                                </Button>
+                                <Button
+                                  id="form-submit"
+                                  type="submit"
+                                  className="bg-primary  cursor-pointer  text-primary-foreground"
+                                  disabled={loading}
+                                >
+                                  {loading ? "Registrando..." : "Registrar Todo"}
+                                </Button>
+                              </div>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </Dialog>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 mt-4 border-b border-border -mb-px">
+              {getAvailableTabs(userRole).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === tab
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  {tab}
+                  {activeTab === tab && (
+                    <motion.div
+                      layoutId="activeTab"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow id="registro-tabla-header" className="border-border hover:bg-transparent">
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Cédula</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Nombre</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Teléfono</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Dirección</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Barrio</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Líder</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Programa</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Tipo</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Estado</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Override</TableHead>
+                    <TableHead className="text-muted-foreground font-medium">Fecha</TableHead>
+                    <TableHead className="text-muted-foreground font-medium w-12">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody id="registro-tabla">
+                  <AnimatePresence mode="popLayout">
+                    {paginatedCedulaBloqueadas.map((votante, index) => (
+                      <motion.tr
+                        key={votante.id || `votante-${index}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ delay: index * 0.03 }}
+                        className={`border-border ${!votante.activa ? 'bg-orange-50/50 hover:bg-orange-100/50' : 'hover:bg-muted/50'}`}
+                      >
+                        <TableCell>
+                          <input type="checkbox" className="rounded border-border ml-5" />
+                        </TableCell>
+                        <TableCell className="font-mono font-medium text-xs text-foreground">{votante.cedula}</TableCell>
+                        <TableCell className="text-sm text-foreground max-w-40 truncate">{votante.nombre || <span className="text-muted-foreground italic">Sin nombre</span>}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{votante.telefono || '—'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-32 truncate">{votante.direccion || '—'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-28 truncate">{votante.barrio || '—'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-32 truncate">{votante.lider || '—'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{votante.programa || '—'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{votante.tipo || '—'}</TableCell>
+                        <TableCell id="tabla-estado">
+                          {votante.activa ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Activa</span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Inactiva</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {votante.override ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Sí</span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">No</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-xs">{votante.fechaRegistro}</TableCell>
+                        <TableCell id="tabla-acciones">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+
+                              <DropdownMenuItem
+                                onClick={() => handleToggleCedulaBloqueada(votante.id)}
+                                className="text-blue-600"
+                              >
+                                <Power className="w-4 h-4 mr-2" />
+                                Toggle Bloqueada
+                              </DropdownMenuItem>
+
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </motion.tr>
+                    ))}
+                  </AnimatePresence>
+                </TableBody>
+              </Table>
+            </div>
+
+            {filteredCedulaBloqueadas.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">No se encontraron votantes</p>
+              </div>
+            )}
+
+            {/* Paginación inteligente */}
+            {filteredCedulaBloqueadas.length > 0 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/30">
+                <div className="text-sm text-muted-foreground">
+                  Mostrando {startIndex + 1} a {Math.min(endIndex, filteredCedulaBloqueadas.length)} de {filteredCedulaBloqueadas.length} registros
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Anterior
+                  </Button>
+                  <div className="flex items-center gap-1">
+                    {(() => {
+                      const pages: (number | string)[] = []
+                      const maxPagesToShow = 10
+
+                      if (totalPages <= maxPagesToShow) {
+                        // Si hay 10 o menos páginas, mostrar todas
+                        for (let i = 1; i <= totalPages; i++) {
+                          pages.push(i)
+                        }
+                      } else {
+                        // Si hay más de 10 páginas
+                        const rangeStart = Math.max(1, currentPage - 4)
+                        const rangeEnd = Math.min(totalPages, currentPage + 5)
+
+                        // Siempre mostrar la página 1
+                        if (rangeStart > 1) {
+                          pages.push(1)
+                          if (rangeStart > 2) {
+                            pages.push('...')
+                          }
+                        }
+
+                        // Mostrar rango alrededor de la actual
+                        for (let i = rangeStart; i <= rangeEnd; i++) {
+                          pages.push(i)
+                        }
+
+                        // Siempre mostrar la última página
+                        if (rangeEnd < totalPages) {
+                          if (rangeEnd < totalPages - 1) {
+                            pages.push('...')
+                          }
+                          pages.push(totalPages)
+                        }
+                      }
+
+                      return pages.map((page, idx) =>
+                        page === '...' ? (
+                          <span key={`dots-${idx}`} className="px-2 text-muted-foreground">...</span>
+                        ) : (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page as number)}
+                            className={`px-2 py-1 rounded text-sm transition-colors ${currentPage === page
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-muted-foreground hover:bg-muted-foreground/10'
+                              }`}
+                          >
+                            {page}
+                          </button>
+                        )
+                      )
+                    })()}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card >
+      </div >
+
+      {/* Modal de confirmación para datos sin guardar */}
+      {
+        showConfirmClose && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-lg max-w-sm w-full p-6 shadow-lg">
+              <h2 className="text-lg font-semibold text-foreground mb-2">¿Descartar cambios?</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Tiene datos sin guardar. Si cierra el modal, los datos se perderán.
+              </p>
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowConfirmClose(false)}
+                >
+                  Continuar editando
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={handleConfirmClose}
+                >
+                  Descartar cambios
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Dialog Toggle Status */}
+      <AlertDialog open={toggleStatusId !== null}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {votantes.find(v => v.id === toggleStatusId)?.isActive ? "Desactivar Registro" : "Activar Registro"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {votantes.find(v => v.id === toggleStatusId)?.isActive
+                ? "¿Estás seguro de que deseas desactivar este registro de votación?"
+                : "¿Estás seguro de que deseas activar este registro de votación?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {/* Mostrar input de observación solo cuando se desactiva */}
+          {votantes.find(v => v.id === toggleStatusId)?.isActive && (
+            <div className="space-y-2">
+              <label htmlFor="observation" className="text-sm font-medium">
+                Comentario de desactivación *
+              </label>
+              <Input
+                id="observation"
+                placeholder="Ej: Datos incompletos, registro duplicado..."
+                value={observation}
+                onChange={(e) => setObservation(e.target.value)}
+                disabled={isTogglingStatus}
+              />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3">
+            <AlertDialogCancel
+              onClick={() => {
+                setToggleStatusId(null)
+                setObservation("")
+              }}
+              disabled={isTogglingStatus}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => toggleStatusId && handleToggleStatus(toggleStatusId)}
+              className={votantes.find(v => v.id === toggleStatusId)?.isActive ? "bg-orange-600 hover:bg-orange-700" : "bg-green-600 hover:bg-green-700"}
+              disabled={isTogglingStatus}
+            >
+              {isTogglingStatus ? "Actualizando..." : (votantes.find(v => v.id === toggleStatusId)?.isActive ? "Desactivar" : "Activar")}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal de búsqueda de puestos de votación */}
+      {
+        showPuestosModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-lg w-full max-w-md p-6 shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Seleccionar Puesto de Votación
+                </h2>
+                <button
+                  onClick={() => setShowPuestosModal(false)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Búsqueda */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Buscar puesto..."
+                    value={searchPuestosModal}
+                    onChange={(e) => setSearchPuestosModal(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-input rounded-md bg-background text-sm outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              {/* Lista de puestos */}
+              <div className="max-h-96 overflow-y-auto border border-border rounded-md">
+                {puestosVotacion
+                  .filter(puesto =>
+                    puesto.puesto.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                    puesto.municipio.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                    puesto.direccion.toLowerCase().includes(searchPuestosModal.toLowerCase())
+                  )
+                  .length > 0 ? (
+                  puestosVotacion
+                    .filter(puesto =>
+                      puesto.puesto.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                      puesto.municipio.toLowerCase().includes(searchPuestosModal.toLowerCase()) ||
+                      puesto.direccion.toLowerCase().includes(searchPuestosModal.toLowerCase())
+                    )
+                    .map((puesto) => (
+                      <button
+                        key={puesto.id}
+                        type="button"
+                        onClick={() => {
+                          if (currentEditingField === 'form') {
+                            setFormData({ ...formData, puestoVotacion: puesto.id })
+                          } else if (currentEditingField === 'row' && currentRowId) {
+                            updateRow(currentRowId, { puestoVotacion: puesto.id })
+                          }
+                          setShowPuestosModal(false)
+                        }}
+                        className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent transition-colors last:border-b-0 ${selectedPuestoModal === puesto.id ? 'bg-primary/10' : ''}`}
+                      >
+                        <div className="font-medium text-sm text-foreground">
+                          {puesto.puesto}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {puesto.municipio} • {puesto.direccion}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Total: {puesto.total} ({puesto.mesas} mesas)
+                        </div>
+                      </button>
+                    ))
+                ) : (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No se encontraron puestos de votación
+                  </div>
+                )}
+              </div>
+
+              {/* Botones */}
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPuestosModal(false)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal de búsqueda de programas */}
+      {
+        showProgramasModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-lg w-full max-w-md p-6 shadow-lg">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Seleccionar Programa
+                </h2>
+                <button
+                  onClick={() => setShowProgramasModal(false)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Búsqueda */}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Buscar programa..."
+                    value={searchProgramasModal}
+                    onChange={(e) => setSearchProgramasModal(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-input rounded-md bg-background text-sm outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+
+              {/* Lista de programas */}
+              <div className="max-h-96 overflow-y-auto border border-border rounded-md">
+                {programasOpciones
+                  .filter(prog =>
+                    prog.label.toLowerCase().includes(searchProgramasModal.toLowerCase())
+                  )
+                  .length > 0 ? (
+                  programasOpciones
+                    .filter(prog =>
+                      prog.label.toLowerCase().includes(searchProgramasModal.toLowerCase())
+                    )
+                    .map((prog) => (
+                      <button
+                        key={prog.label}
+                        type="button"
+                        onClick={() => {
+                          if (currentEditingFieldPrograma === 'form') {
+                            setFormData({
+                              ...formData,
+                              programaId: prog.programaId,
+                              programaLabel: prog.label,
+                              sedeId: prog.sedeId || null,
+                              tipoVinculacionId: prog.tipoVinculacionId,
+                              esPago: prog.esPago,
+                            })
+                          } else if (currentEditingFieldPrograma === 'row' && currentRowIdPrograma) {
+                            updateRow(currentRowIdPrograma, {
+                              programaId: prog.programaId,
+                              programaLabel: prog.label,
+                              sedeId: prog.sedeId || null,
+                              tipoVinculacionId: prog.tipoVinculacionId,
+                              esPago: prog.esPago,
+                            })
+                          }
+                          setShowProgramasModal(false)
+                        }}
+                        className={`w-full text-left px-4 py-3 border-b border-border hover:bg-accent transition-colors last:border-b-0 ${selectedProgramaModal === prog.label ? 'bg-primary/10' : ''}`}
+                      >
+                        <div className="font-medium text-sm text-foreground">
+                          {prog.label}
+                        </div>
+                      </button>
+                    ))
+                ) : (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No se encontraron programas
+                  </div>
+                )}
+              </div>
+
+              {/* Botones */}
+              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowProgramasModal(false)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal de cédula duplicada */}
+      {
+        showDuplicateModal && duplicateCedulaBloqueadaData && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-lg max-w-md w-full p-6 shadow-lg">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <X className="w-6 h-6 text-red-600" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">Ya se encuentra registrada</h2>
+              </div>
+
+              <p className="text-sm text-muted-foreground mb-4">
+                {duplicateMessage ? (
+                  <span className="font-semibold text-foreground">{duplicateMessage}</span>
+                ) : (
+                  <>La cédula <span className="font-semibold text-foreground">{duplicateCedula}</span> ya se encuentra registrada en el sistema.</>
+                )}
+              </p>
+
+              <div className="bg-muted/50 rounded-lg p-4 mb-4 space-y-2 border border-border">
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Nombre Registrado:</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {(duplicateCedulaBloqueadaData?.votacion ?? duplicateCedulaBloqueadaData)?.nombre1} {(duplicateCedulaBloqueadaData?.votacion ?? duplicateCedulaBloqueadaData)?.apellido1}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Teléfono:</p>
+                  <p className="text-sm text-foreground">{(duplicateCedulaBloqueadaData?.votacion ?? duplicateCedulaBloqueadaData)?.telefono}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Dirección:</p>
+                  <p className="text-sm text-foreground">{(duplicateCedulaBloqueadaData?.votacion ?? duplicateCedulaBloqueadaData)?.direccion}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Barrio:</p>
+                  <p className="text-sm text-foreground">{(duplicateCedulaBloqueadaData?.votacion ?? duplicateCedulaBloqueadaData)?.barrio}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Puesto de Votación:</p>
+                  <p className="text-sm text-foreground">
+                    {puestosVotacion.find(p => p.id === (duplicateCedulaBloqueadaData?.votacion ?? duplicateCedulaBloqueadaData)?.puestoVotacion)?.puesto || 'No especificado'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">Fecha de Registro:</p>
+                  <p className="text-sm text-foreground">
+                    {new Date((duplicateCedulaBloqueadaData?.votacion ?? duplicateCedulaBloqueadaData)?.createdAt).toLocaleDateString("es-CO")}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground mb-6">
+                Si cree que esto es un error, contacte con el administrador del sistema.
+              </p>
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  className="bg-primary text-primary-foreground"
+                  onClick={() => {
+                    setShowDuplicateModal(false)
+                    setDuplicateCedulaBloqueadaData(null)
+                    setDuplicateCedula("")
+                    setDuplicateMessage(null)
+                  }}
+                >
+                  Entendido
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal de resultado de importación de Excel */}
+      {showImportResultModal && importResult && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background border border-border rounded-lg max-w-sm w-full p-6 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <FileSpreadsheet className="w-6 h-6 text-green-600" />
+              </div>
+              <h2 className="text-lg font-semibold text-foreground">Importación Completada</h2>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                <span className="text-sm text-muted-foreground">Total en Excel</span>
+                <span className="font-bold text-foreground">{importResult.totalExcel.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg border border-green-200">
+                <span className="text-sm text-green-700">Nuevas insertadas</span>
+                <span className="font-bold text-green-700">{importResult.nuevasInsertadas.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <span className="text-sm text-yellow-700">Ya existían</span>
+                <span className="font-bold text-yellow-700">{importResult.yaExistian.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                className="bg-primary text-primary-foreground"
+                onClick={() => { setShowImportResultModal(false); setImportResult(null) }}
+              >
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div >
+  )
+}
+
+export { Loading }

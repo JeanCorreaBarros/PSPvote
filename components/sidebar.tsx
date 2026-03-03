@@ -39,27 +39,33 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-  { 
-    icon: LayoutDashboard, 
-    label: "Dashboard", 
+  {
+    icon: LayoutDashboard,
+    label: "Dashboard",
     href: "/dashboard",
     requiredRole: ["ADMIN", "LIDER"] // Ambos roles pueden ver
   },
-  { 
-    icon: ClipboardList, 
-    label: "Registro de Votos", 
+  {
+    icon: ClipboardList,
+    label: "Registro de Votos",
     href: "/dashboard/registro-votos",
     requiredRole: ["ADMIN", "LIDER"] // Ambos roles pueden ver
   },
-  { 
-    icon: Users, 
-    label: "Confirmacion de Certificados", 
+  {
+    icon: ClipboardList,
+    label: "Registro Doc. Bloqueados",
+    href: "/dashboard/cedulas-bloqueadas",
+    requiredRole: ["ADMIN"] // Solo ADMIN
+  },
+  {
+    icon: Users,
+    label: "Confirmacion de Certificados",
     href: "/dashboard/votantes",
     requiredRole: ["ADMIN"] // Solo ADMIN
   },
-  { 
-    icon: MapPin, 
-    label: "Puestos de Votación", 
+  {
+    icon: MapPin,
+    label: "Puestos de Votación",
     href: "/dashboard/puestos",
     requiredRole: ["ADMIN"] // Solo ADMIN
   },
@@ -69,9 +75,9 @@ const menuItems: MenuItem[] = [
     href: "/dashboard/mapa-lideres",
     requiredRole: ["ADMIN"] // Solo ADMIN
   },*/
-  { 
-    icon: BarChart3, 
-    label: "Reportes", 
+  {
+    icon: BarChart3,
+    label: "Reportes",
     href: "/dashboard/reportes",
     requiredRole: ["ADMIN"] // Solo ADMIN
   },
@@ -80,13 +86,13 @@ const menuItems: MenuItem[] = [
     label: "Configuración",
     requiredRole: ["ADMIN"], // Solo ADMIN
     submenu: [
-      { 
-        label: "Configuración", 
+      {
+        label: "Configuración",
         href: "/dashboard/configuracion",
         requiredRole: ["ADMIN"]
       },
-      { 
-        label: "Usuarios", 
+      {
+        label: "Usuarios",
         href: "/dashboard/configuracion/usuarios",
         requiredRole: ["ADMIN"]
       },
