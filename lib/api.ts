@@ -10,7 +10,7 @@ async function apiCall<T>(
   options: FetchOptions = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
-  
+
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
   }
@@ -105,6 +105,7 @@ export const reportesApi = {
   getPorEdad: () => apiCall('/reportes/por-edad'),
   exportarCSV: () => apiCall('/reportes/export-csv'),
   exportarPDF: () => apiCall('/reportes/export-pdf'),
+  getValidaciones: () => apiCall<any[]>('/validaciones/reportes'),
 }
 
 // Configuración endpoints

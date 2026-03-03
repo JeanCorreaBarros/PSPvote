@@ -21,82 +21,17 @@ interface Reporte {
   id: number
   nombre: string
   descripcion: string
-  icon: any
+  icon: string
   descargas: DescargarOpciones[]
 }
 
-const reportes: Reporte[] = [
-  {
-    id: 1, nombre: "Resumen General de Votación", descripcion: "Estadísticas generales de participación electoral", icon: PieChart, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfgeneral?formato=oficio" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelgeneral" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipgeneral?formato=oficio" }
-    ]
-  },
-  {
-    id: 2, nombre: "Registro por Puestos", descripcion: "Detalle de votantes por cada puesto de votación", icon: BarChart3, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfporpuesto?formato=oficio" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelporpuesto" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipporpuesto?formato=oficio" }
-    ]
-  },
-  {
-    id: 3, nombre: "Registro por Lider", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdf?formato=oficio" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcel" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdf?formato=oficio" }
-    ]
-  },
-  {
-    id: 4, nombre: "Registro por Programa", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfporprograma?formato=oficio" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelporprograma" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipporprograma?formato=oficio" }
-    ]
-  },
-  {
-    id: 5, nombre: "Registro por Documentos", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfcedulas?formato=oficio&modo=cedulas_puesto" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelcedulas?formato=oficio&modo=cedulas_puesto" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfcedulas?formato=oficio&modo=cedulas_puesto" }
-    ]
-  },
-  {
-    id: 6, nombre: "Registro por Documentos Duplicados", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfcedulasduplicadas?formato=oficio&modo=cedulas_puesto" },
-      /*{ tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelduplicados" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipduplicados?formato=oficio" }*/
-    ]
-  },
-  {
-    id: 7, nombre: "Registro por Documentos Confirmados", descripcion: "Listado completo de votantes registrados", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfconfirmados?formato=oficio" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelconfirmados?formato=oficio" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipconfirmados?formato=oficio" }
-    ]
-  },
-  {
-    id: 8, nombre: "Registro por Barrios", descripcion: "Listado completo de votantes por barrios", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/exportpdfporbarrio?formato=oficio" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelbarrio?formato=oficio" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfbarrio?formato=oficio" }
-    ]
-  },
-  {
-    id: 9, nombre: "Registro por Sedes", descripcion: "Listado completo de votantes por sedes", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/dashboard/exportpdfporsede?formato=oficio" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelsede?formato=oficio" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzippdfsede?formato=oficio" }
-    ]
-  },
-  {
-    id: 10, nombre: "Registro por Lider sin cedula Bloqueada", descripcion: "Listado completo de Lider sin cedula Bloqueada", icon: FileText, descargas: [
-      { tipo: "PDF", label: "Descargar PDF", endpoint: "/reports/dashboard/dashboard/exportpdfporlidersinbloqueocedulas?formato=oficio" },
-      { tipo: "Excel", label: "Descargar Excel", endpoint: "/reports/dashboard/exportexcelporlidersinbloqueocedulas?formato=oficio" },
-      { tipo: "ZIP", label: "Descargar ZIP", endpoint: "/reports/dashboard/exportzipporlidersinbloqueocedulas?formato=oficio" }
-    ]
-  },
-]
+const iconMap: Record<string, any> = {
+  PieChart: PieChart,
+  BarChart3: BarChart3,
+  FileText: FileText,
+}
+
+// El array de reportes ahora se obtiene dinámicamente del API
 
 interface Estadisticas {
   totalRegistros: number
@@ -113,27 +48,33 @@ const defaultEstadisticas: Estadisticas = {
 }
 
 export default function ReportesPage() {
+  const [reportes, setReportes] = useState<Reporte[]>([])
   const [estadisticas, setEstadisticas] = useState<Estadisticas>(defaultEstadisticas)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchEstadisticas = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true)
         setError(null)
+
+        // Fetch reportes
+        const reportesData = await reportesApi.getValidaciones()
+        setReportes(reportesData)
+
         // Descomenta cuando el endpoint esté listo
         // const data = await reportesApi.getResumen()
         // setEstadisticas(data)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error al cargar estadísticas')
+        setError(err instanceof Error ? err.message : 'Error al cargar datos')
         setEstadisticas(defaultEstadisticas)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchEstadisticas()
+    fetchData()
   }, [])
 
   const handleDescargar = async (reporteId: number, tipo: string, endpoint?: string) => {
@@ -286,7 +227,10 @@ export default function ReportesPage() {
                   <CardContent className="p-5">
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                        <reporte.icon className="w-6 h-6 text-primary" />
+                        {(() => {
+                          const IconComponent = iconMap[reporte.icon] || FileText
+                          return <IconComponent className="w-6 h-6 text-primary" />
+                        })()}
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold text-foreground">{reporte.nombre}</h3>
